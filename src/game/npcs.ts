@@ -222,6 +222,16 @@ export class Crowd {
     other.yaw = Math.PI
   }
 
+  resetProtest(): void {
+    for (const npc of this.npcs) {
+      if (!npc.id.startsWith('protest') || !npc.home) continue
+      npc.pos.copy(npc.home)
+      npc.path = []
+      npc.speed = 0
+      npc.group.position.copy(npc.home)
+    }
+  }
+
   disperseProtest(): void {
     for (const npc of this.npcs) {
       if (!npc.id.startsWith('protest')) continue
@@ -298,7 +308,11 @@ export class Crowd {
       const flyby = dxz < 13 && dy > 2 && dy < 28 && body.speed > 13
       const chat = npc.pair && dxz < 8 && body.speed < 5 && Math.abs(dy) < 4
       if ((flyby || chat) && npc.barkCd <= 0 && npc.id !== talkingId) {
-        const text = npc.pair && !flyby ? pairBark(npc.index + Math.floor(performance.now() / 4000)) : barkLine(npc.index)
+        const text = npc.id.startsWith('protest') && npc.path.length === 0
+        ? 'Reset is on the roof.'
+        : npc.pair && !flyby
+          ? pairBark(npc.index + Math.floor(performance.now() / 4000))
+          : barkLine(npc.index)
         this.barks.push({ text, world: npc.pos.clone().setY(npc.pos.y + 2.15), life: 2.2 })
         npc.barkCd = flyby ? 3.5 : 7
         if (this.barks.length > 5) this.barks.shift()

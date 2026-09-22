@@ -125,6 +125,9 @@ dd { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
 #relays { display: flex; gap: 8px; justify-content: center; min-height: 8px; margin-top: 8px; }
 #relays span { width: 28px; height: 4px; background: rgba(239, 234, 226, 0.22); }
 #relays span.lit { background: var(--amber); box-shadow: 0 0 10px rgba(231, 161, 90, 0.8); }
+#jobs { list-style: none; padding: 0; margin: 8px 0 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+#jobs li { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; }
+#jobs li.done { color: var(--amber); }
 .scoreblock { text-align: right; }
 #score { margin: 0; font-family: Syne, sans-serif; font-size: 28px; }
 #combo { margin: 0; color: var(--amber); min-height: 1.2em; }
@@ -198,10 +201,14 @@ body.touching #touch:not(.hidden) { display: block; }
 }
 .t-buttons {
   pointer-events: auto;
-  position: absolute; right: 16px; bottom: 16px;
-  display: grid; grid-template-columns: repeat(3, 72px); gap: 8px;
+  position: absolute; right: 12px; bottom: 12px;
+  display: grid; grid-template-columns: repeat(2, 96px); gap: 10px;
 }
-.t-buttons button { height: 64px; background: rgba(7, 9, 13, 0.45); }
+.t-buttons button {
+  height: 72px; background: rgba(7, 9, 13, 0.62);
+  font-size: 15px; border-radius: 12px;
+}
+.t-buttons button[data-touch="swing"] { grid-column: 1 / -1; height: 88px; }
 
 @media (max-width: 800px) {
   #menu { background: linear-gradient(to top, rgba(6, 8, 12, 0.9), rgba(6, 8, 12, 0.2)); align-items: flex-end; }

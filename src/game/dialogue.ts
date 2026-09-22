@@ -5,6 +5,9 @@ export type TalkContext = {
   integrity: number
   maraUsed: boolean
   beaconsLeft: number
+  datacenterDone: boolean
+  starlinkDone: boolean
+  chargersLeft: number
 }
 
 const CITIZENS: Line[][] = [
@@ -72,6 +75,15 @@ export function pairBark(index: number): string {
   return PAIR_BARKS[index % PAIR_BARKS.length]
 }
 
+function sideJobs(ctx: TalkContext): string {
+  const left: string[] = []
+  if (!ctx.datacenterDone) left.push('the datacenter reset')
+  if (!ctx.starlinkDone) left.push('the Starlink dish')
+  if (ctx.chargersLeft > 0) left.push(`${ctx.chargersLeft} Tesla posts`)
+  if (left.length === 0) return 'The side jobs are done. I will be here. The plaza does not get a night off.'
+  return `Still open: ${left.join(', ')}.`
+}
+
 export function conversation(
   id: string,
   name: string,
@@ -86,7 +98,7 @@ export function conversation(
             { speaker: 'Nia Voss', text: ctx.beaconsLeft === 0
               ? 'All four are singing. The extract pad on the high north roof is awake. Go home the long way.'
               : `${ctx.beaconsLeft} still dark. Nearest beam is marked. Swing through it, do not pose for it.` },
-            { speaker: 'Nia Voss', text: 'I will be here. The plaza does not get a night off.' },
+            { speaker: 'Nia Voss', text: sideJobs(ctx) },
           ]
         : [
             { speaker: 'Nia Voss', text: 'You came down the long way. Good. The stairs take all night.' },

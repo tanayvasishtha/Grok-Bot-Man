@@ -11,6 +11,7 @@ export type HudView = {
   objective: string
   detail: string
   relays: boolean[]
+  jobs: { text: string; done: boolean }[]
   clock: string
   prompt: string
   hint: string
@@ -88,6 +89,9 @@ export class Hud {
     const relays = document.getElementById('relays')!
     relays.innerHTML = view.relays.map((on) => `<span class="${on ? 'lit' : ''}"></span>`).join('')
     relays.classList.toggle('hidden', view.relays.length === 0)
+    const jobs = document.getElementById('jobs')!
+    jobs.innerHTML = view.jobs.map((job) => `<li class="${job.done ? 'done' : ''}">${job.done ? '✓ ' : ''}${job.text}</li>`).join('')
+    jobs.classList.toggle('hidden', view.jobs.length === 0)
     document.getElementById('score')!.textContent = formatScore(view.score)
     const combo = document.getElementById('combo')!
     combo.textContent = view.combo > 1 ? `${view.combo}×` : ''

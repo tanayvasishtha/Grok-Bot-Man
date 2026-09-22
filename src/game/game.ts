@@ -209,6 +209,8 @@ export class Game {
       this.datacenterDone = false
       this.starlinkDone = false
       this.chargersDone = [false, false, false]
+      this.city.resetJobs()
+      this.crowd.resetProtest()
       this.checkpoint = this.snap()
     } else {
       this.score = this.checkpoint.score
@@ -412,6 +414,9 @@ export class Game {
       integrity: this.integrity,
       maraUsed: this.maraUsed,
       beaconsLeft: this.entities.captured.filter((v) => !v).length,
+      datacenterDone: this.datacenterDone,
+      starlinkDone: this.starlinkDone,
+      chargersLeft: this.chargersDone.filter((done) => !done).length,
     })
     this.talk = { npc, role: script.role, lines: script.lines, index: 0 }
     this.mode = 'dialogue'
@@ -587,6 +592,15 @@ export class Game {
 
   private objective(): { text: string; detail: string; pos: THREE.Vector3; color: string } {
     const colors = ['#9be7ff', '#ffb15a', '#ff7a4a', '#c9b6ff']
+    if (this.stats.slings === 0) {
+      const flying = this.stats.fired > 0
+      return {
+        text: flying ? 'Let go at the bottom' : 'Hold to catch a roof',
+        detail: flying ? 'Release when the cable turns amber' : 'Mouse, F, or hold Swing',
+        pos: this.player.pos,
+        color: '#e7a15a',
+      }
+    }
     if (!this.mission) return { text: 'Speak with Nia Voss', detail: 'She is in the plaza, under you.', pos: this.city.nia, color: '#9be7ff' }
     let nearest = -1
     let best = Infinity
@@ -692,9 +706,21 @@ export class Game {
       objective: goal.text,
       detail: goal.detail,
       relays: this.mission ? this.entities.captured.slice() : [],
+      jobs: this.mission && this.stats.slings > 0
+        ? [
+            { text: 'Relays', done: this.entities.captured.every(Boolean) },
+            { text: 'Datacenter', done: this.datacenterDone },
+            { text: 'Starlink', done: this.starlinkDone },
+            { text: 'Tesla', done: this.chargersDone.every(Boolean) },
+          ]
+        : [],
       clock: this.mission ? formatTime(this.stats.seconds) : '',
       prompt: this.usePrompt() || (npc ? `E   ${npc.name}` : ''),
-      hint: this.mode === 'play' && this.hintLife > 0 ? 'Hold left mouse or F · release at the bottom · Shift zip · C dive' : '',
+      hint: this.stats.slings > 0 || this.mode !== 'play'
+        ? ''
+        : this.stats.fired === 0
+          ? 'Hold left mouse, F, or Swing'
+          : 'Release when the cable turns amber',
       sling: this.slingLife > 0 ? this.slingText : '',
       slingWindow: this.player.slingWindow,
       anchorHot: Boolean(this.player.preview) && !this.player.grounded,

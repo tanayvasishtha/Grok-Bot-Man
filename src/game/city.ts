@@ -302,6 +302,8 @@ export class City {
   private dataBeam!: THREE.Mesh
   private starBeam!: THREE.Mesh
   private engineGlows: THREE.Mesh[] = []
+  private dish: THREE.Mesh | null = null
+  private dishLive = true
   private cars: Car[] = []
   private carParts: THREE.InstancedMesh[] = []
   private dummy = new THREE.Object3D()
@@ -621,6 +623,7 @@ export class City {
     const lamp = this.consoleLamps[which === 'data' ? 0 : 1]
     if (lamp) (lamp.material as THREE.MeshBasicMaterial).color.set('#e7a15a')
     this.closeColumn(which === 'data' ? this.dataBeam : this.starBeam, '#e7a15a')
+    if (which === 'star') this.dishLive = false
   }
 
   private closeColumn(beam: THREE.Mesh | undefined, color: string): void {
@@ -666,7 +669,26 @@ export class City {
     )
     dish.rotation.x = 1.05
     dish.position.set(at.x + 2.2, at.y + 2.3, at.z)
+    this.dish = dish
     this.group.add(mast, dish)
+  }
+
+  resetJobs(): void {
+    this.dishLive = true
+    this.reopen(this.dataBeam, '#ffb15a')
+    this.reopen(this.starBeam, '#c5ddff')
+    this.chargerBeams.forEach((beam) => this.reopen(beam, '#f4f4f2'))
+    const inks = ['#ffb15a', '#c5ddff']
+    this.consoleLamps.forEach((lamp, i) => (lamp.material as THREE.MeshBasicMaterial).color.set(inks[i] ?? '#f4f4f2'))
+    this.chargerLamps.forEach((lamp) => (lamp.material as THREE.MeshBasicMaterial).color.set('#3a3a3a'))
+  }
+
+  private reopen(beam: THREE.Mesh | undefined, color: string): void {
+    if (!beam) return
+    beam.userData.open = true
+    const mat = beam.material as THREE.MeshBasicMaterial
+    mat.color.set(color)
+    mat.opacity = 0.16
   }
 
   private addCharger(at: THREE.Vector3): void {
@@ -1209,6 +1231,7 @@ export class City {
       const s = 0.82 + Math.sin(time * 7 + glow.position.x) * 0.22
       glow.scale.setScalar(s)
     }
+    if (this.dish && this.dishLive) this.dish.rotation.y += dt * 0.6
   }
 
   nudgeCars(feet: THREE.Vector3, vel: THREE.Vector3, grounded: boolean): void {
