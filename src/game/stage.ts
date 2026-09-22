@@ -17,8 +17,9 @@ export class Stage {
   private moonTarget = new THREE.Object3D()
 
   constructor(canvas: HTMLCanvasElement) {
+    const phone = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6))
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, phone ? 1.25 : 1.5))
     this.renderer.setSize(window.innerWidth, window.innerHeight, false)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -40,7 +41,8 @@ export class Stage {
     this.scene.add(hemi)
     this.moon = new THREE.DirectionalLight(0xc5d4ff, 2.35)
     this.moon.castShadow = true
-    this.moon.shadow.mapSize.set(2048, 2048)
+    const shadow = window.matchMedia('(pointer: coarse)').matches ? 1024 : 2048
+    this.moon.shadow.mapSize.set(shadow, shadow)
     this.moon.shadow.bias = -0.00025
     this.moon.shadow.normalBias = 0.04
     const cam = this.moon.shadow.camera as THREE.OrthographicCamera
@@ -126,7 +128,8 @@ export class Stage {
   resize(): void {
     const w = window.innerWidth
     const h = window.innerHeight
-    const pr = Math.min(window.devicePixelRatio, 1.6)
+    const phone = window.matchMedia('(pointer: coarse)').matches || w < 900
+    const pr = Math.min(window.devicePixelRatio, phone ? 1.25 : 1.5)
     this.renderer.setPixelRatio(pr)
     this.renderer.setSize(w, h, false)
     this.composer.setPixelRatio(pr)
