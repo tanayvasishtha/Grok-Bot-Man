@@ -72,15 +72,17 @@ export class CameraRig {
     this.desired.copy(this.target).addScaledVector(this.lookDir, -dist)
     this.ray.set(this.target, this.desired.clone().sub(this.target).normalize())
     this.ray.far = dist
-    const hit = this.ray.intersectObjects(solids, false)[0]
-    if (hit && hit.distance < dist) dist = Math.max(1.4, hit.distance - 0.45)
+    const hit = this.ray.intersectObjects(solids, false).find((item) => item.object.userData.buildingId !== -1)
+    if (hit && hit.distance < dist) dist = Math.max(1.8, hit.distance - 0.55)
     this.desired.copy(this.target).addScaledVector(this.lookDir, -dist)
     if (!this.ready) {
       this.smooth.copy(this.desired)
       this.ready = true
     }
+    if (this.desired.y < 1.15) this.desired.y = 1.15
     const k = 1 - Math.exp(-8 * dt)
     this.smooth.lerp(this.desired, k)
+    if (this.smooth.y < 1.15) this.smooth.y = 1.15
   }
 
   apply(camera: THREE.PerspectiveCamera, speed: number): void {

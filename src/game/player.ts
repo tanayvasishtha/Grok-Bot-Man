@@ -232,8 +232,8 @@ export class Player {
   ): void {
     const fwdX = Math.sin(camYaw)
     const fwdZ = Math.cos(camYaw)
-    const rightX = Math.cos(camYaw)
-    const rightZ = -Math.sin(camYaw)
+    const rightX = -Math.cos(camYaw)
+    const rightZ = Math.sin(camYaw)
     this.wish.set(rightX * input.moveX + fwdX * input.moveY, 0, rightZ * input.moveX + fwdZ * input.moveY)
     const wishLen = this.wish.length()
     if (wishLen > 1) this.wish.multiplyScalar(1 / wishLen)
@@ -293,7 +293,7 @@ export class Player {
     this.constrainRope()
     this.collide(city, flags, audio)
     this.constrainRope()
-    this.ground(dt, city, flags)
+    this.ground(dt, city, flags, audio)
 
     const sp = this.speed
     if (sp > MAX_SPEED) this.vel.multiplyScalar(MAX_SPEED / sp)
@@ -302,17 +302,31 @@ export class Player {
     }
   }
 
-  private ground(dt: number, city: City, flags: PlayerFrame): void {
-    const origin = this.tmp.set(this.pos.x, this.pos.y + 1.6, this.pos.z)
+  private ground(dt: number, city: City, flags: PlayerFrame, audio: AudioBus): void {
+    const origin = this.tmp.set(this.pos.x, this.pos.y + 3.2, this.pos.z)
     this.ray.set(origin, this.tmp2.set(0, -1, 0))
-    this.ray.far = 8
+    this.ray.far = 10
     const hits = this.ray.intersectObjects(city.solids, false)
-    const groundY = hits.length ? Math.max(0, hits[0].point.y) : 0
+    let groundY = hits.length ? hits[0].point.y : 0
+    if (this.pos.y < 0) groundY = Math.max(groundY, 0)
     const gap = this.pos.y - groundY
     const was = this.grounded
-    if (!this.swinging && this.jumpLock <= 0 && this.vel.y <= 2 && gap < 0.45 && gap > -1.4) {
+    if (gap < 0 || (gap < 0.04 && this.vel.y < 0)) {
+      this.pos.y = groundY + 0.04
+      if (this.vel.y < 0) {
+        if (this.swinging) this.skimStreet(audio)
+        else if (this.jumpLock <= 0) {
+          if (this.vel.y < -32) flags.hardLand = true
+          this.vel.y = 0
+          this.grounded = true
+          this.diving = false
+        } else {
+          this.vel.y = 0
+        }
+      }
+    } else if (!this.swinging && this.jumpLock <= 0 && this.vel.y <= 2 && gap < 0.45) {
       if (this.vel.y < -32) flags.hardLand = true
-      this.pos.y = groundY
+      this.pos.y = groundY + 0.04
       this.vel.y = 0
       this.grounded = true
       this.diving = false
@@ -321,6 +335,24 @@ export class Player {
     }
     if (was && !this.grounded && this.vel.y <= 0) this.coyote = 0.12
     if (!this.grounded && this.coyote > 0) this.coyote -= dt
+  }
+
+  private skimStreet(audio: AudioBus): void {
+    const impact = -this.vel.y
+    const horiz = Math.hypot(this.vel.x, this.vel.z)
+    if (impact < 3.5 && horiz < 7) {
+      this.vel.y = 0
+      this.release(false, null)
+      this.grounded = true
+      this.diving = false
+      return
+    }
+    this.vel.y = Math.min(10, 2.2 + impact * 0.22)
+    this.grounded = false
+    if (this.wallLock <= 0 && impact > 8) {
+      this.wallLock = 0.32
+      audio.wall()
+    }
   }
 
   private collide(city: City, flags: PlayerFrame, audio: AudioBus): void {
@@ -365,6 +397,18 @@ export class Player {
         ]
         let best = faces[0]
         for (const face of faces) if (face.push < best.push) best = face
+        if (best.axis === 'y' && best.sign < 0 && box.min.y <= 0.3) {
+          let side = faces[0]
+          let found = false
+          for (const face of faces) {
+            if (face.axis === 'y') continue
+            if (!found || face.push < side.push) {
+              side = face
+              found = true
+            }
+          }
+          if (found) best = side
+        }
         const normal = this.tmp2.set(0, 0, 0)
         if (best.axis === 'x') {
           center.x = best.sign < 0 ? minX : maxX
