@@ -60,6 +60,7 @@ export class Game {
   private talk: Talk | null = null
   private talked = new Set<string>()
   private maraUsed = false
+  private nightClear = false
   private datacenterDone = false
   private starlinkDone = false
   private chargersDone = [false, false, false]
@@ -204,6 +205,7 @@ export class Game {
       this.entities.restore(this.city.beacons.map(() => false))
       this.talked.clear()
       this.maraUsed = false
+      this.nightClear = false
       this.datacenterDone = false
       this.starlinkDone = false
       this.chargersDone = [false, false, false]
@@ -308,6 +310,7 @@ export class Game {
       this.slingText = 'Sling'
       this.slingLife = 0.7
       this.hintLife = 0
+      this.cameraRig.kick()
     }
     if (flags.hardLand && this.player.invuln <= 0) this.hurt()
 
@@ -338,6 +341,7 @@ export class Game {
         this.audio.beacon()
         this.city.ignite(event.name)
         this.hud.toast(`${event.name} is live`)
+        this.noteNight()
         this.checkpoint = this.snap()
         this.checkpoint.pos.copy(this.player.pos)
       } else if (event.t === 'near') {
@@ -525,7 +529,7 @@ export class Game {
   private nearSite(at: THREE.Vector3, reach: number, onFoot: boolean): boolean {
     const dxz = Math.hypot(this.player.pos.x - at.x, this.player.pos.z - at.z)
     const dy = Math.abs(this.player.pos.y - at.y)
-    if (onFoot) return this.player.grounded && dxz < reach && dy < 2.4
+    if (onFoot) return this.player.grounded && dxz < reach && dy < 3.2
     return dxz < reach && dy < 12
   }
 
@@ -538,34 +542,46 @@ export class Game {
       this.score += 280
       this.audio.pickup(n)
       this.hud.toast(n === 3 ? 'Tesla row is live.' : `Charger ${n}/3`)
+      this.noteNight()
     })
   }
 
   private tryConsole(): boolean {
-    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 2.6, true)) {
+    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 3.4, true)) {
       this.datacenterDone = true
       this.city.sealConsole('data')
       this.score += 800
       this.audio.beacon()
       this.crowd.disperseProtest()
       this.hud.toast('Reset taken. The crowd breaks up.')
+      this.noteNight()
       return true
     }
-    if (!this.starlinkDone && this.nearSite(this.city.starlink, 2.6, true)) {
+    if (!this.starlinkDone && this.nearSite(this.city.starlink, 3.4, true)) {
       this.starlinkDone = true
       this.city.sealConsole('star')
       this.score += 800
       this.audio.beacon()
       this.hud.toast('Starlink dish is aimed again.')
+      this.noteNight()
       return true
     }
     return false
   }
 
+  private noteNight(): void {
+    if (this.nightClear || !this.mission) return
+    const relays = this.entities.captured.every(Boolean)
+    const sides = this.datacenterDone && this.starlinkDone && this.chargersDone.every(Boolean)
+    if (!relays || !sides) return
+    this.nightClear = true
+    this.hud.toast('The night is clear. Take the pad.')
+  }
+
   private usePrompt(): string {
     if (!this.mission || !this.player.grounded) return ''
-    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 2.6, true)) return 'E   Reset'
-    if (!this.starlinkDone && this.nearSite(this.city.starlink, 2.6, true)) return 'E   Realign'
+    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 3.4, true)) return 'E   Reset'
+    if (!this.starlinkDone && this.nearSite(this.city.starlink, 3.4, true)) return 'E   Realign'
     return ''
   }
 

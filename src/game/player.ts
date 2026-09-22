@@ -210,9 +210,9 @@ export class Player {
       const fromFall = this.vel.y < 0 ? clamp(1 + this.vel.y / 9, 0, 1) : 0
       const fromRise = 1 - clamp(this.sinceBottom / 0.28, 0, 1)
       const closeness = Math.max(fromFall, this.vel.y >= 0 ? fromRise : fromFall)
-      const boost = 1.16 + closeness * 0.2
+      const boost = 1.22 + closeness * 0.24
       this.vel.multiplyScalar(boost)
-      this.vel.y = Math.max(this.vel.y, 1.5 + closeness * 2.5)
+      this.vel.y = Math.max(this.vel.y, 2 + closeness * 3)
     }
     this.swinging = false
     this.zipping = false

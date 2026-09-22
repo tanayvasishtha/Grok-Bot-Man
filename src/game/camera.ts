@@ -12,7 +12,12 @@ export class CameraRig {
   private ray = new THREE.Raycaster()
   private smooth = new THREE.Vector3()
   private ready = false
+  private kickFov = 0
   orbit = 0.6
+
+  kick(): void {
+    this.kickFov = 9
+  }
 
   update(
     dt: number,
@@ -88,7 +93,8 @@ export class CameraRig {
   apply(camera: THREE.PerspectiveCamera, speed: number): void {
     camera.position.copy(this.smooth)
     camera.lookAt(this.target)
-    const fov = damp(camera.fov, 66 + clamp(speed / 58, 0, 1) * 16, 4, 0.016)
+    const fov = damp(camera.fov, 66 + clamp(speed / 58, 0, 1) * 16 + this.kickFov, 5, 0.016)
+    this.kickFov = damp(this.kickFov, 0, 7, 0.016)
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = fov
       camera.updateProjectionMatrix()
