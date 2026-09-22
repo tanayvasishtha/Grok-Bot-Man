@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grok Bot-Man — Night Circuit</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307090d'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23efeae2'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@360;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view"></canvas>
+      <div id="vignette"></div>
+      <div id="toasts"></div>
+      <div id="barks"></div>
+
+      <section id="menu">
+        <div class="panel">
+          <p class="kicker">Night Circuit</p>
+          <h1>Grok<br />Bot-Man</h1>
+          <p class="lede">
+            A courier with a filament gun and a face the plaza already knows. Four relays went dark across the wards.
+            Swing the roofs, talk to the people under them, and light the circuit back up.
+          </p>
+          <div class="row">
+            <button class="primary" data-action="start">Drop in</button>
+            <p id="best" class="best"></p>
+          </div>
+          <dl class="controls">
+            <div><dt>Look</dt><dd>Mouse, right-drag, or arrows</dd></div>
+            <div><dt>Swing</dt><dd>Hold left mouse or F, release to fly</dd></div>
+            <div><dt>Zip</dt><dd>Shift or right click</dd></div>
+            <div><dt>Dive</dt><dd>Ctrl or C</dd></div>
+            <div><dt>Move</dt><dd>W A S D, Space to jump</dd></div>
+            <div><dt>Talk</dt><dd>E, on your feet beside someone</dd></div>
+          </dl>
+          <label class="vol">Sound <input data-volume type="range" min="0" max="100" value="75" /></label>
+        </div>
+      </section>
+
+      <section id="hud" class="hidden">
+        <header>
+          <div class="brand">
+            <svg class="mark" viewBox="-15 -15 259 259" aria-hidden="true"><g transform="translate(114.2705 114.2705) scale(1.040524017467249) translate(-114.2705 -114.2705)"><path fill="currentColor" d="M228.541 114.228C228.541 130.133 225.184 145.994 218.738 160.534C212.674 174.217 203.904 186.669 193.065 196.988C155.933 232.34 99.497 238.596 55.5255 212.24C45.097 205.99 35.6851 198.072 27.7451 188.866C19.1926 178.953 12.3686 167.569 7.65781 155.351C2.60712 142.264 0 128.257 0 114.228C0 98.3219 3.35751 82.4611 9.80315 67.9215C15.8672 54.2382 24.6377 41.7862 35.4767 31.4668C72.6081 -3.88483 129.044 -10.1413 173.016 16.2153C183.444 22.4653 192.856 30.3829 200.796 39.5896C209.349 49.5018 216.173 60.8859 220.883 73.1037C225.934 86.1906 228.541 100.198 228.541 114.228Z"></path><path fill="#101217" d="M118.17 70.73L120.45 71.04L122.59 71.76L124.55 72.87L126.18 74.38L127.42 76.24L128.34 78.29L129.10 80.42L129.83 82.57L130.55 84.72L131.27 86.86L131.97 89.02L132.64 91.19L133.29 93.36L133.91 95.55L134.50 97.74L135.05 99.95L135.36 102.23L135.16 104.55L134.41 106.80L133.11 108.84L131.36 110.51L129.28 111.73L127.01 112.45L124.68 112.65L122.41 112.33L120.31 111.51L118.45 110.26L116.93 108.62L115.81 106.69L115.01 104.57L114.39 102.39L113.80 100.19L113.17 98.01L112.52 95.84L111.85 93.66L111.17 91.51L110.47 89.35L109.75 87.20L108.94 85.09L108.17 82.96L107.64 80.75L107.63 78.44L108.31 76.16L109.61 74.14L111.41 72.51L113.54 71.41L115.84 70.83Z"></path><path fill="#101217" d="M179.77 59.76L182.04 60.05L184.10 60.75L185.92 61.77L187.55 63.03L188.95 64.50L190.10 66.16L191.07 67.95L191.90 69.82L192.67 71.74L193.41 73.66L194.13 75.60L194.80 77.56L195.42 79.55L196.02 81.54L196.56 83.57L197.06 85.61L197.50 87.67L197.90 89.77L198.06 91.94L197.82 94.21L197.15 96.51L195.85 98.72L193.75 100.38L191.30 101.01L189.00 100.81L186.99 100.03L185.30 98.85L183.91 97.38L182.84 95.66L182.05 93.76L181.48 91.76L181.00 89.71L180.53 87.64L180.02 85.60L179.48 83.58L178.89 81.58L178.26 79.60L177.60 77.62L176.90 75.68L176.15 73.76L175.36 71.86L174.53 69.98L173.78 68.06L173.41 65.97L173.71 63.70L175.05 61.53L177.32 60.14Z"></path></g></svg>
+            <div>
+              <p class="kicker" id="obj-kicker">Night Circuit</p>
+              <div id="integrity"></div>
+            </div>
+          </div>
+          <div class="objective">
+            <p id="obj-text"></p>
+            <p id="obj-detail"></p>
+          </div>
+          <div class="scoreblock">
+            <p class="label">Score</p>
+            <p id="score">0</p>
+            <p id="combo"></p>
+            <p id="clock"></p>
+          </div>
+        </header>
+        <button id="pause-btn" data-action="pause">Pause</button>
+        <div id="reticle"></div>
+        <div id="marker" class="hidden"></div>
+        <p id="sling"></p>
+        <footer>
+          <p class="speed"><span id="speed">0</span><small>km/h</small></p>
+          <p id="prompt" class="hidden"></p>
+          <p id="hint"></p>
+        </footer>
+        <p id="debug" class="hidden"></p>
+      </section>
+
+      <section id="dialogue" class="hidden">
+        <p id="dlg-role"></p>
+        <h2 id="dlg-name"></h2>
+        <p id="dlg-text"></p>
+        <p id="dlg-next">E continue</p>
+      </section>
+
+      <section id="pause" class="hidden">
+        <div class="card">
+          <p class="kicker">Held</p>
+          <h2>The city can wait a second.</h2>
+          <label class="vol">Sound <input data-volume type="range" min="0" max="100" value="75" /></label>
+          <div class="row">
+            <button class="primary" data-action="resume">Resume</button>
+            <button data-action="menu">Title</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="end" class="hidden">
+        <div class="card">
+          <p class="kicker" id="end-kicker"></p>
+          <h2 id="end-title"></h2>
+          <p id="end-copy"></p>
+          <ul id="end-lines"></ul>
+          <div class="row">
+            <button class="primary" data-action="retry">Wake at last relay</button>
+            <button data-action="roof">From the roof</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="touch" class="hidden">
+        <div class="t-buttons">
+          <button data-touch="talk">Talk</button>
+          <button data-touch="jump">Jump</button>
+          <button data-touch="dive">Dive</button>
+          <button data-touch="zip">Zip</button>
+          <button data-touch="swing">Swing</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
