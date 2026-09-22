@@ -22,7 +22,7 @@ export class Stage {
     this.renderer.setSize(window.innerWidth, window.innerHeight, false)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.02
+    this.renderer.toneMappingExposure = 0.94
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
@@ -66,7 +66,7 @@ export class Stage {
 
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
-    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.42, 0.84)
+    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.42, 0.55, 0.78)
     this.composer.addPass(bloom)
     this.fxaa = new ShaderPass(FXAAShader)
     this.composer.addPass(this.fxaa)
