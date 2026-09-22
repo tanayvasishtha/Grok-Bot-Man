@@ -156,7 +156,7 @@ dd { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
   font-size: 12px; letter-spacing: 0.08em; color: var(--ice);
   text-shadow: 0 1px 8px #000; white-space: nowrap;
 }
-#marker::before { content: "\25b2 "; }
+#marker::before { content: "▲ "; }
 .bark {
   position: absolute; transform: translate(-50%, -120%);
   color: var(--bone); font-size: 13px; opacity: 0; text-shadow: 0 2px 8px #000;
