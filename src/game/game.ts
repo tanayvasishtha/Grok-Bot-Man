@@ -1,0 +1,567 @@
+import * as THREE from 'three'
+import { AudioBus } from './audio'
+import { CameraRig } from './camera'
+import { City } from './city'
+import { conversation, type Line } from './dialogue'
+import { Entities } from './entities'
+import { Hero } from './hero'
+import { Hud, type HudMode, type HudView } from './hud'
+import { Input } from './input'
+import { formatScore, formatTime } from './math'
+import { Crowd, type Npc } from './npcs'
+import { Player } from './player'
+import { Stage } from './stage'
+
+type Stats = {
+  distance: number
+  logits: number
+  slings: number
+  beacons: number
+  talks: number
+  near: number
+  damage: number
+  seconds: number
+  fired: number
+}
+
+type Checkpoint = {
+  pos: THREE.Vector3
+  captured: boolean[]
+  score: number
+  combo: number
+  stats: Stats
+  integrity: number
+}
+
+type Talk = { npc: Npc; role: string; lines: Line[]; index: number }
+
+const emptyStats = (): Stats => ({
+  distance: 0, logits: 0, slings: 0, beacons: 0, talks: 0, near: 0, damage: 0, seconds: 0, fired: 0,
+})
+
+export class Game {
+  private stage: Stage
+  private city: City
+  private hero: Hero
+  private player: Player
+  private crowd: Crowd
+  private entities: Entities
+  private input: Input
+  private audio = new AudioBus()
+  private hud: Hud
+  private cameraRig = new CameraRig()
+  private mode: HudMode = 'menu'
+  private mission = false
+  private score = 0
+  private combo = 1
+  private integrity = 3
+  private stats = emptyStats()
+  private checkpoint: Checkpoint
+  private talk: Talk | null = null
+  private talked = new Set<string>()
+  private maraUsed = false
+  private slingText = ''
+  private slingLife = 0
+  private hintLife = 18
+  private district = 'Central Plaza'
+  private districtHold = ''
+  private districtTime = 0
+  private debug = false
+  private win = false
+  private logitStep = 0
+  private last = performance.now()
+  private cable: THREE.Mesh
+  private cableGlow: THREE.Mesh
+  private marker: THREE.Mesh
+  private up = new THREE.Vector3(0, 1, 0)
+  private dir = new THREE.Vector3()
+  private proj = new THREE.Vector3()
+  private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.stage = new Stage(canvas)
+    this.city = new City()
+    this.hero = new Hero()
+    this.player = new Player(this.city.spawn)
+    this.crowd = new Crowd(this.city)
+    this.entities = new Entities(this.city)
+    this.input = new Input(canvas)
+    this.hud = new Hud()
+    this.stage.scene.add(this.city.group, this.hero.root, this.entities.group)
+    this.crowd.mount(this.stage.scene)
+
+    const core = new THREE.MeshBasicMaterial({ color: 0xf4fdff })
+    const glow = new THREE.MeshBasicMaterial({
+      color: 0xbdf6ff,
+      transparent: true,
+      opacity: 0.28,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    this.cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 8), core)
+    this.cableGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1, 8), glow)
+    this.cable.visible = false
+    this.cableGlow.visible = false
+    this.marker = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.45, 0),
+      new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.9 }),
+    )
+    this.marker.visible = false
+    this.stage.scene.add(this.cable, this.cableGlow, this.marker)
+
+    this.checkpoint = this.snap()
+    this.cameraRig.yaw = this.player.yaw
+    ;(window as unknown as { __gbm?: Game }).__gbm = this
+    this.hud.bind((action) => this.action(action))
+    canvas.addEventListener('click', () => {
+      if (this.mode === 'play' && !this.talk) void canvas.requestPointerLock()
+    })
+    window.addEventListener('keydown', (e) => {
+      if (this.mode === 'end' && e.code === 'Enter') this.restore(false)
+    })
+    requestAnimationFrame((t) => this.frame(t))
+  }
+
+  private snap(): Checkpoint {
+    return {
+      pos: this.player.pos.clone(),
+      captured: this.entities.captured.map((v) => v),
+      score: this.score,
+      combo: this.combo,
+      stats: { ...this.stats },
+      integrity: this.integrity,
+    }
+  }
+
+  private action(action: string): void {
+    if (action.startsWith('volume:')) {
+      this.audio.setVolume(Number(action.slice(7)) / 100)
+      return
+    }
+    if (action === 'start') this.begin()
+    if (action === 'resume') this.resume()
+    if (action === 'pause') this.pause()
+    if (action === 'retry') this.restore(false)
+    if (action === 'roof') this.restore(true)
+    if (action === 'menu') {
+      this.mode = 'menu'
+      this.talk = null
+      document.exitPointerLock()
+    }
+  }
+
+  private begin(): void {
+    this.audio.ensure()
+    this.restore(true)
+    this.mode = 'play'
+    this.hintLife = 18
+    this.cameraRig.yaw = this.player.yaw
+    this.cameraRig.pitch = -0.08
+    this.cameraRig.snap(this.player.pos)
+    const canvas = this.stage.renderer.domElement
+    void canvas.requestPointerLock()
+    this.hud.toast('Hold to swing. Release when the fall turns upward.')
+  }
+
+  private pause(): void {
+    if (this.mode !== 'play' || this.talk) return
+    this.mode = 'pause'
+    document.exitPointerLock()
+  }
+
+  private resume(): void {
+    if (this.mode !== 'pause') return
+    this.audio.ensure()
+    this.mode = 'play'
+    void this.stage.renderer.domElement.requestPointerLock()
+  }
+
+  private restore(roof: boolean): void {
+    const point = roof ? this.city.spawn : this.checkpoint.pos
+    this.player.reset(point)
+    if (roof) {
+      this.mission = false
+      this.score = 0
+      this.combo = 1
+      this.integrity = 3
+      this.stats = emptyStats()
+      this.entities.restore(this.city.beacons.map(() => false))
+      this.talked.clear()
+      this.maraUsed = false
+      this.checkpoint = this.snap()
+    } else {
+      this.score = this.checkpoint.score
+      this.combo = this.checkpoint.combo
+      this.integrity = Math.max(1, this.checkpoint.integrity)
+      this.stats = { ...this.checkpoint.stats }
+      this.entities.restore(this.checkpoint.captured)
+      this.mission = this.checkpoint.captured.some(Boolean) || this.mission
+    }
+    this.win = false
+    this.mode = 'play'
+    this.talk = null
+    this.cameraRig.yaw = this.player.yaw
+    this.cameraRig.snap(this.player.pos)
+    void this.stage.renderer.domElement.requestPointerLock()
+  }
+
+  private frame(now: number): void {
+    const dt = Math.min(0.05, (now - this.last) / 1000)
+    this.last = now
+    const input = this.input.snapshot()
+    if (input.debug) this.debug = !this.debug
+
+    let usedTalk = false
+    if (this.talk) {
+      if (input.talk || input.jump) {
+        this.advance()
+        usedTalk = true
+      } else if (input.pause) this.closeTalk()
+    } else if (input.pause) {
+      if (this.mode === 'play') this.pause()
+      else if (this.mode === 'pause') this.resume()
+    }
+
+    const simulate = this.mode === 'play' && !this.talk
+    const alive = this.mode === 'play' || this.mode === 'menu' || this.mode === 'dialogue'
+    this.cameraRig.update(
+      dt,
+      simulate ? input : null,
+      this.player.pos,
+      this.player.vel,
+      this.city.solids,
+      this.mode === 'menu',
+      this.reduceMotion,
+    )
+    if (simulate) this.stepPlay(dt, input, usedTalk)
+    else if (alive) {
+      this.city.update(dt)
+      this.crowd.update(dt, { x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, speed: 0, grounded: true }, this.talk?.npc.id ?? null)
+      this.player.pose(this.hero, this.cameraRig.yaw)
+    }
+    this.stage.camera.fov = this.mode === 'menu' ? 58 : this.stage.camera.fov
+    if (simulate) {
+      this.cameraRig.update(dt, null, this.player.pos, this.player.vel, this.city.solids, false, this.reduceMotion)
+    }
+    this.cameraRig.apply(this.stage.camera, simulate ? this.player.speed : 0)
+    this.stage.follow(this.player.pos.x, this.player.pos.y, this.player.pos.z)
+    this.poseCable()
+    if (this.slingLife > 0) this.slingLife -= dt
+    this.audio.update({
+      speed: simulate ? this.player.speed : 0,
+      plaza: Math.hypot(this.player.pos.x, this.player.pos.z),
+      drone: this.entities.closestDrone,
+      active: this.mode !== 'menu',
+      quiet: Boolean(this.talk) || this.mode === 'pause',
+    })
+    this.hud.render(this.view())
+    this.stage.render()
+    requestAnimationFrame((t) => this.frame(t))
+  }
+
+  private stepPlay(dt: number, input: Parameters<Player['update']>[1], usedTalk = false): void {
+    const before = this.player.pos.clone()
+    const flags = this.player.update(dt, input, this.cameraRig.yaw, this.cameraRig.lookDir, this.city, this.hero, this.audio)
+    this.stats.distance += Math.hypot(this.player.pos.x - before.x, this.player.pos.z - before.z)
+    if (flags.attached) this.stats.fired++
+    if (flags.slung) {
+      this.stats.slings++
+      this.combo = Math.min(12, this.combo + 1)
+      this.score += 160 * this.combo
+      this.slingText = 'Sling'
+      this.slingLife = 0.7
+      this.hintLife = 0
+    }
+    if (flags.hardLand && this.player.invuln <= 0) this.hurt()
+
+    if (input.talk && !usedTalk) {
+      const npc = this.crowd.nearest(this.player.pos.x, this.player.pos.y, this.player.pos.z, this.player.grounded, this.player.speed)
+      if (npc) this.openTalk(npc)
+    }
+
+    const events = this.entities.update(dt, {
+      x: this.player.pos.x,
+      y: this.player.pos.y,
+      z: this.player.pos.z,
+      speed: this.player.speed,
+      invuln: this.player.invuln,
+    }, this.mission)
+    let hurt = false
+    for (const event of events) {
+      if (event.t === 'logit') {
+        this.stats.logits++
+        this.score += 120 * this.combo
+        this.audio.pickup(this.logitStep++)
+      } else if (event.t === 'beacon') {
+        this.stats.beacons++
+        this.score += 900
+        this.audio.beacon()
+        this.hud.toast(`${event.name} is live`)
+        this.checkpoint = this.snap()
+        this.checkpoint.pos.copy(this.player.pos)
+      } else if (event.t === 'near') {
+        this.stats.near++
+        this.combo = Math.min(12, this.combo + 1)
+        this.score += 70 * this.combo
+      } else if (event.t === 'damage' && !hurt) {
+        hurt = true
+        this.hurt()
+      } else if (event.t === 'extract') {
+        this.winRun()
+      } else if (event.t === 'extract-locked') {
+        this.hud.toast('The pad is cold. Light the relays first.')
+      }
+    }
+
+    if (this.mission && !this.win) this.stats.seconds += dt
+    this.city.update(dt)
+    this.crowd.update(dt, {
+      x: this.player.pos.x,
+      y: this.player.pos.y,
+      z: this.player.pos.z,
+      speed: this.player.speed,
+      grounded: this.player.grounded,
+    }, null)
+    this.trackDistrict(dt)
+    if (this.hintLife > 0) this.hintLife -= dt
+  }
+
+  private hurt(): void {
+    if (this.player.invuln > 0 || this.win) return
+    this.integrity -= 1
+    this.stats.damage++
+    this.combo = 1
+    this.player.hit()
+    this.audio.damage()
+    if (this.integrity <= 0) {
+      this.mode = 'end'
+      document.exitPointerLock()
+      this.storeBest(false)
+    }
+  }
+
+  private winRun(): void {
+    if (this.win) return
+    this.win = true
+    this.mode = 'end'
+    this.audio.win()
+    document.exitPointerLock()
+    const bonus = Math.floor(Math.max(0, 420 - this.stats.seconds) * 8)
+    this.score += bonus
+    this.storeBest(true)
+  }
+
+  private storeBest(won: boolean): void {
+    const prev = Number(localStorage.getItem('gbm-best-score') || '0')
+    if (this.score > prev) localStorage.setItem('gbm-best-score', String(Math.floor(this.score)))
+    if (won) {
+      const best = Number(localStorage.getItem('gbm-best-time') || '0')
+      const ms = this.stats.seconds
+      if (best === 0 || ms < best) localStorage.setItem('gbm-best-time', String(ms))
+    }
+  }
+
+  private openTalk(npc: Npc): void {
+    const script = conversation(npc.id, npc.name, npc.index, {
+      mission: this.mission,
+      integrity: this.integrity,
+      maraUsed: this.maraUsed,
+      beaconsLeft: this.entities.captured.filter((v) => !v).length,
+    })
+    this.talk = { npc, role: script.role, lines: script.lines, index: 0 }
+    this.mode = 'dialogue'
+    document.exitPointerLock()
+    this.audio.blip()
+    if (!this.talked.has(npc.id)) {
+      this.talked.add(npc.id)
+      this.stats.talks++
+      this.score += 40
+    }
+  }
+
+  private advance(): void {
+    if (!this.talk) return
+    this.audio.blip()
+    if (this.talk.index < this.talk.lines.length - 1) {
+      this.talk.index++
+      return
+    }
+    this.finishTalk()
+  }
+
+  private closeTalk(): void {
+    this.talk = null
+    if (this.mode === 'dialogue') this.mode = 'play'
+  }
+
+  private finishTalk(): void {
+    const npc = this.talk?.npc
+    this.talk = null
+    this.mode = 'play'
+    if (!npc) return
+    if (npc.id === 'nia' && !this.mission) {
+      this.mission = true
+      this.hud.toast('Relays marked. Any order.')
+      this.checkpoint = this.snap()
+    }
+    if (npc.id === 'mara' && !this.maraUsed && this.integrity < 3) {
+      this.maraUsed = true
+      this.integrity = Math.min(3, this.integrity + 1)
+      this.hud.toast('One sensor light restored.')
+    }
+  }
+
+  private trackDistrict(dt: number): void {
+    const name = this.city.districtAt(this.player.pos.x, this.player.pos.z)
+    if (name === 'The wards') return
+    if (name !== this.districtHold) {
+      this.districtHold = name
+      this.districtTime = 0
+    } else this.districtTime += dt
+    if (this.districtTime > 0.35 && name !== this.district) {
+      this.district = name
+      this.hud.toast(name)
+    }
+  }
+
+  private poseCable(): void {
+    const show = this.player.swinging
+    this.cable.visible = show
+    this.cableGlow.visible = show
+    if (show) {
+      this.stretch(this.cable, this.hero.handWorld, this.player.anchor)
+      this.stretch(this.cableGlow, this.hero.handWorld, this.player.anchor)
+    }
+    const preview = Boolean(this.player.preview) && this.mode === 'play' && !this.player.swinging
+    this.marker.visible = Boolean(preview)
+    if (preview && this.player.preview) {
+      this.marker.position.copy(this.player.preview.point)
+      this.marker.rotation.y += 0.02
+    }
+  }
+
+  private stretch(mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3): void {
+    this.dir.copy(b).sub(a)
+    const straight = Math.max(0.2, this.dir.length())
+    mesh.position.copy(a).lerp(b, 0.5)
+    mesh.scale.set(1, straight, 1)
+    const n = this.dir.multiplyScalar(1 / straight)
+    if (n.y < -0.999) mesh.quaternion.set(1, 0, 0, 0)
+    else mesh.quaternion.setFromUnitVectors(this.up, n)
+  }
+
+  private objective(): { text: string; detail: string; pos: THREE.Vector3 } {
+    if (!this.mission) return { text: 'Speak with Nia Voss', detail: 'She is in the plaza, under you.', pos: this.city.nia }
+    let nearest = -1
+    let best = Infinity
+    this.entities.captured.forEach((done, i) => {
+      if (done) return
+      const p = this.city.beacons[i].position
+      const d = Math.hypot(p.x - this.player.pos.x, p.z - this.player.pos.z)
+      if (d < best) {
+        best = d
+        nearest = i
+      }
+    })
+    if (nearest >= 0) {
+      const beacon = this.city.beacons[nearest]
+      return { text: `Light the ${beacon.name} relay`, detail: `${Math.round(best)} m`, pos: beacon.position }
+    }
+    const d = Math.hypot(this.city.extract.x - this.player.pos.x, this.city.extract.z - this.player.pos.z)
+    return { text: 'Reach the extract pad', detail: `${Math.round(d)} m · Glass Mile roof`, pos: this.city.extract }
+  }
+
+  private screenMarker(pos: THREE.Vector3): { x: number; y: number; text: string } | null {
+    this.proj.copy(pos).project(this.stage.camera)
+    const behind = this.proj.z > 1
+    if (behind) {
+      this.proj.x *= -1
+      this.proj.y *= -1
+    }
+    const ax = Math.abs(this.proj.x)
+    const ay = Math.abs(this.proj.y)
+    if (!behind && ax < 0.82 && ay < 0.82) return null
+    const scale = Math.max(ax, ay, 0.001)
+    this.proj.x = (this.proj.x / scale) * 0.86
+    this.proj.y = (this.proj.y / scale) * 0.86
+    return {
+      x: (this.proj.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-this.proj.y * 0.5 + 0.5) * window.innerHeight,
+      text: this.objective().text,
+    }
+  }
+
+  private view(): HudView {
+    const goal = this.objective()
+    const npc = this.mode === 'play'
+      ? this.crowd.nearest(this.player.pos.x, this.player.pos.y, this.player.pos.z, this.player.grounded, this.player.speed)
+      : null
+    const barks = this.crowd.barks.slice(0, 5).map((bark) => {
+      this.proj.copy(bark.world).project(this.stage.camera)
+      return {
+        x: (this.proj.x * 0.5 + 0.5) * window.innerWidth,
+        y: (-this.proj.y * 0.5 + 0.5) * window.innerHeight,
+        text: this.proj.z > 1 ? '' : bark.text,
+      }
+    }).filter((bark) => bark.text)
+    const bestScore = localStorage.getItem('gbm-best-score')
+    const bestTime = localStorage.getItem('gbm-best-time')
+    const best = [
+      bestScore ? `Best score ${formatScore(Number(bestScore))}` : '',
+      bestTime ? `Best run ${formatTime(Number(bestTime))}` : '',
+    ].filter(Boolean).join('  ·  ')
+    const line = this.talk?.lines[this.talk.index]
+    return {
+      mode: this.mode,
+      score: this.score,
+      combo: this.combo,
+      speed: this.player.speed,
+      integrity: this.integrity,
+      objective: goal.text,
+      detail: goal.detail,
+      clock: this.mission ? formatTime(this.stats.seconds) : '',
+      prompt: npc ? `E   ${npc.name}` : '',
+      hint: this.mode === 'play' && this.hintLife > 0 ? 'Hold left mouse or F · release at the bottom · Shift zip · C dive' : '',
+      sling: this.slingLife > 0 ? this.slingText : '',
+      anchorHot: Boolean(this.player.preview) && !this.player.grounded,
+      debug: this.debug
+        ? `${this.player.swinging ? 'swing' : this.player.grounded ? 'ground' : 'air'}  ${this.player.speed.toFixed(1)} m/s  rope ${this.player.rope.toFixed(1)}`
+        : '',
+      barks,
+      marker: this.mode === 'play' ? this.screenMarker(goal.pos) : null,
+      dialogue: this.talk && line
+        ? { name: line.speaker || this.talk.npc.name, role: this.talk.role, text: line.text, last: this.talk.index === this.talk.lines.length - 1 }
+        : null,
+      end: this.mode === 'end' ? this.endCard() : null,
+      best: best || 'No finished run yet',
+      volume: Math.round(this.audio.volume * 100),
+      district: this.district,
+    }
+  }
+
+  private endCard(): HudView['end'] {
+    const lines = [
+      `Score ${formatScore(this.score)}`,
+      `Time ${formatTime(this.stats.seconds)}`,
+      `Slings ${this.stats.slings}`,
+      `Logits ${this.stats.logits}`,
+      `Relays ${this.stats.beacons}/4`,
+      `Hits ${this.stats.damage}`,
+    ]
+    if (this.win) {
+      const rank = this.stats.damage === 0 && this.stats.seconds < 180 ? 'S' : this.stats.damage <= 1 ? 'A' : 'B'
+      return {
+        win: true,
+        title: `Rank ${rank}`,
+        copy: 'The relays are singing again. The city keeps its lights, and the plaza will pretend it never doubted you.',
+        lines,
+      }
+    }
+    return {
+      win: false,
+      title: 'Down',
+      copy: 'The filament went slack. The circuit can wait one more night, which is not the same as being fine.',
+      lines,
+    }
+  }
+}
