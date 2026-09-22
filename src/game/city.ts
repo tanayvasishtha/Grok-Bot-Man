@@ -119,6 +119,18 @@ const WARD_SIGN: Record<Exclude<Ward, 'inner'>, string> = {
   antenna: 'ANTENNA',
 }
 
+type CompanySite = 'tesla' | 'neuralink' | 'starlink' | 'x' | 'spacex' | 'launch'
+
+function companyAt(i: number, j: number): CompanySite | null {
+  if (i === 8 && j === 5) return 'tesla'
+  if (i === 8 && j === 6) return 'neuralink'
+  if (i === 7 && j === 8) return 'starlink'
+  if (i === 3 && j === 2) return 'x'
+  if (i === 5 && j === 9) return 'spacex'
+  if (i === 6 && j === 9) return 'launch'
+  return null
+}
+
 function wardAt(x: number, z: number): Ward {
   if (z < -80 && Math.abs(x) < Math.abs(z) + 30) return 'glass'
   if (x < -80 && Math.abs(z) <= Math.abs(x) + 20) return 'lantern'
@@ -148,29 +160,161 @@ function signTexture(text: string, color: string): THREE.CanvasTexture {
   return billboardTexture(text, '', color)
 }
 
-function billboardTexture(title: string, line: string, ink: string): THREE.CanvasTexture {
+function wrapText(g: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word
+    if (g.measureText(next).width > maxWidth && current) {
+      lines.push(current)
+      current = word
+    } else current = next
+  }
+  if (current) lines.push(current)
+  return lines
+}
+
+function billboardTexture(title: string, line: string, ink: string, bg = '#090b10'): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 1024
-  canvas.height = line ? 420 : 220
+  canvas.height = line ? 512 : 220
   const g = canvas.getContext('2d')!
-  g.fillStyle = '#090b10'
+  g.fillStyle = bg
   g.fillRect(0, 0, canvas.width, canvas.height)
   g.strokeStyle = ink
   g.lineWidth = 10
   g.strokeRect(16, 16, canvas.width - 32, canvas.height - 32)
   g.fillStyle = ink
-  g.font = '700 132px Outfit, Segoe UI, sans-serif'
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.fillText(title, canvas.width / 2, line ? 160 : canvas.height / 2)
+  const titleSize = title.length > 11 ? 84 : 112
+  g.font = `700 ${titleSize}px Outfit, Segoe UI, sans-serif`
+  g.fillText(title, canvas.width / 2, line ? 150 : canvas.height / 2)
   if (line) {
-    g.globalAlpha = 0.78
-    g.font = '500 52px Outfit, Segoe UI, sans-serif'
-    g.fillText(line, canvas.width / 2, 290)
+    g.globalAlpha = 0.88
+    let size = 40
+    g.font = `500 ${size}px Outfit, Segoe UI, sans-serif`
+    let rows = wrapText(g, line, 920)
+    while (rows.length > 3 && size > 26) {
+      size -= 2
+      g.font = `500 ${size}px Outfit, Segoe UI, sans-serif`
+      rows = wrapText(g, line, 920)
+    }
+    rows.forEach((row, i) => g.fillText(row, canvas.width / 2, 300 + i * (size + 12)))
   }
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   return tex
+}
+
+type Clad = 'giga' | 'hall' | 'stone' | 'lab' | 'link' | 'night' | 'shed'
+
+function cladTexture(kind: Clad): THREE.CanvasTexture {
+  const tall = kind === 'stone'
+  const canvas = document.createElement('canvas')
+  canvas.width = tall ? 256 : 512
+  canvas.height = tall ? 512 : 256
+  const g = canvas.getContext('2d')!
+  if (kind === 'giga') {
+    g.fillStyle = '#e7e7e2'
+    g.fillRect(0, 0, 512, 256)
+    g.strokeStyle = '#b7b7b0'
+    g.lineWidth = 3
+    for (let y = 16; y < 256; y += 18) {
+      g.beginPath()
+      g.moveTo(0, y)
+      g.lineTo(512, y)
+      g.stroke()
+    }
+    g.strokeStyle = '#9a9a94'
+    for (let x = 0; x <= 512; x += 64) {
+      g.beginPath()
+      g.moveTo(x, 0)
+      g.lineTo(x, 256)
+      g.stroke()
+    }
+    g.fillStyle = '#2e3338'
+    for (let x = 8; x < 512; x += 52) g.fillRect(x, 210, 34, 40)
+  } else if (kind === 'hall') {
+    g.fillStyle = '#f2f3f1'
+    g.fillRect(0, 0, 512, 256)
+    g.fillStyle = '#d4d6d2'
+    for (let x = 0; x < 512; x += 36) g.fillRect(x, 0, 5, 256)
+    g.fillStyle = '#1b2834'
+    g.fillRect(0, 96, 512, 78)
+    for (let x = 10; x < 512; x += 28) {
+      g.fillStyle = (x / 28) % 3 === 0 ? '#0c1218' : '#b9d4ea'
+      g.fillRect(x, 108, 16, 52)
+    }
+  } else if (kind === 'stone') {
+    g.fillStyle = '#cbb89e'
+    g.fillRect(0, 0, 256, 512)
+    g.fillStyle = '#b7a488'
+    for (let x = 0; x <= 256; x += 32) g.fillRect(x, 0, 6, 512)
+    for (let y = 18; y < 500; y += 36) {
+      for (let x = 10; x < 250; x += 32) {
+        const lit = (x + y) % 9 === 0
+        g.fillStyle = lit ? '#ffd2a4' : '#2a241c'
+        g.fillRect(x, y, 16, 22)
+      }
+    }
+  } else if (kind === 'lab') {
+    g.fillStyle = '#f5f6f4'
+    g.fillRect(0, 0, 512, 256)
+    g.fillStyle = '#7eb6e0'
+    g.fillRect(0, 48, 512, 14)
+    g.fillStyle = '#d5dde4'
+    for (let x = 24; x < 500; x += 70) g.fillRect(x, 110, 36, 48)
+    g.fillStyle = '#1a242e'
+    for (let x = 30; x < 500; x += 70) g.fillRect(x, 118, 24, 32)
+  } else if (kind === 'link') {
+    g.fillStyle = '#101820'
+    g.fillRect(0, 0, 512, 256)
+    for (let y = 12; y < 244; y += 28) {
+      for (let x = 10; x < 500; x += 32) {
+        g.fillStyle = (x + y) % 5 === 0 ? '#d7ecff' : '#1a3344'
+        g.fillRect(x, y, 18, 16)
+      }
+    }
+  } else if (kind === 'night') {
+    g.fillStyle = '#14161c'
+    g.fillRect(0, 0, 512, 256)
+    g.fillStyle = '#c9a27a'
+    g.fillRect(0, 70, 512, 6)
+    for (let y = 20; y < 230; y += 36) {
+      for (let x = 16; x < 490; x += 40) {
+        g.fillStyle = (x + y) % 7 === 0 ? '#ffc48a' : '#0c0e12'
+        g.fillRect(x, y, 22, 18)
+      }
+    }
+  } else {
+    g.fillStyle = '#8d9399'
+    g.fillRect(0, 0, 512, 256)
+    g.fillStyle = '#6e757b'
+    for (let y = 8; y < 256; y += 14) g.fillRect(0, y, 512, 4)
+    g.fillStyle = '#2c3136'
+    g.fillRect(0, 200, 512, 56)
+  }
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.anisotropy = 8
+  return tex
+}
+
+function cladMaterial(kind: Clad, rx: number, ry: number, glow: string, glowAmt: number): THREE.MeshStandardMaterial {
+  const map = cladTexture(kind)
+  map.repeat.set(rx, ry)
+  return new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map,
+    roughness: kind === 'link' || kind === 'night' ? 0.34 : 0.58,
+    metalness: kind === 'giga' || kind === 'hall' ? 0.22 : 0.35,
+    emissive: new THREE.Color(glow),
+    emissiveMap: map,
+    emissiveIntensity: glowAmt,
+  })
 }
 
 function groundTexture(): THREE.CanvasTexture {
@@ -295,6 +439,8 @@ export class City {
   readonly neuralink = new THREE.Vector3()
   readonly protest = new THREE.Vector3()
   readonly starlink = new THREE.Vector3()
+  private neuralinkDoor = new THREE.Vector3()
+  private starlinkRoof = new THREE.Vector3()
   readonly chargers: THREE.Vector3[] = []
   private datacenterPick = Infinity
   private consoleLamps: THREE.Mesh[] = []
@@ -306,6 +452,8 @@ export class City {
   private engineGlows: THREE.Mesh[] = []
   private dish: THREE.Mesh | null = null
   private dishLive = true
+  private trackers: THREE.Object3D[] = []
+  private padLight: THREE.PointLight | null = null
   private cars: Car[] = []
   private carParts: THREE.InstancedMesh[] = []
   private dummy = new THREE.Object3D()
@@ -362,14 +510,12 @@ export class City {
     let crownZ = 0
     let crownId = -1
     const brands: { name: string; line: string; ink: string }[] = [
-      { name: 'TESLA', line: 'THE CAR IS THE GRID', ink: '#f4f4f2' },
-      { name: 'SPACEX', line: 'THE SHIP IS SOUTH', ink: '#f7f7f7' },
-      { name: 'NEURALINK', line: 'QUIET THE NOISE', ink: '#d7ecff' },
-      { name: 'STARLINK', line: 'AIM THE DISH', ink: '#c5ddff' },
-      { name: 'TESLA', line: 'LANTERN ROW STALLS', ink: '#e8e8e6' },
-      { name: 'X', line: 'THE PLAZA IS LISTENING', ink: '#f2f2f2' },
-      { name: 'SPACEX', line: 'STAINLESS OVER THE MASTS', ink: '#ffffff' },
-      { name: 'NEURALINK', line: 'THE LINK STAYS UP', ink: '#b7d4ff' },
+      { name: 'TESLA', line: "Accelerating the world's transition to sustainable energy", ink: '#e10600' },
+      { name: 'SPACEX', line: 'Making life multiplanetary', ink: '#f7f7f7' },
+      { name: 'NEURALINK', line: 'Restore autonomy. Unlock human potential.', ink: '#d7ecff' },
+      { name: 'STARLINK', line: 'High-speed internet, anywhere on Earth', ink: '#c5ddff' },
+      { name: 'X', line: 'The everything app', ink: '#f2f2f2' },
+      { name: 'xAI', line: 'Understand the universe', ink: '#f4f1ea' },
     ]
     let brandI = 0
 
@@ -378,6 +524,12 @@ export class City {
         if (i === 5 && j === 5) continue
         let x = CITY.origin + (i + 0.5) * CITY.cell
         let z = CITY.origin + (j + 0.5) * CITY.cell
+        const site = companyAt(i, j)
+        if (site) {
+          this.buildCompany(site, id, x, z)
+          id++
+          continue
+        }
         const ward = wardAt(x, z)
         const north = ward === 'glass'
         const east = ward === 'foundry'
@@ -495,7 +647,7 @@ export class City {
           const wide = Boolean(brand)
           const tex = brand ? billboardTexture(brand.name, brand.line, ink) : signTexture(label, ink)
           const sign = new THREE.Mesh(
-            new THREE.PlaneGeometry(wide ? 16 : 8, wide ? 6.4 : 2),
+            new THREE.PlaneGeometry(wide ? 18 : 8, wide ? 9 : 2),
             new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
           )
           const face = rng() > 0.5 ? 1 : -1
@@ -563,7 +715,6 @@ export class City {
     this.beacons = this.makeBeacons()
     this.addWardLights()
     this.addLamps()
-    this.addStarship()
     this.addCars(rng)
     this.layoutCars()
     this.water = this.group.children.find((child) => child.name === 'water') as THREE.Mesh
@@ -572,9 +723,10 @@ export class City {
   private finishJobSites(dark: THREE.Material): void {
     if (this.datacenter.y === 0) this.datacenter.set(140, 14, 48)
     this.protest.copy(this.openSpot(this.datacenter.x + 6, this.datacenter.z + 16, () => 0.42))
-    this.neuralink.copy(this.openSpot(this.protest.x + 26, this.protest.z + 6, () => 0.4))
+    this.neuralink.copy(this.neuralinkDoor.lengthSq() > 0 ? this.neuralinkDoor : this.openSpot(this.protest.x + 26, this.protest.z + 6, () => 0.4))
     this.resetPad.set(this.protest.x, 0, this.protest.z + 5)
-    if (this.starlink.y === 0) this.starlink.set(36, 18, 170)
+    if (this.starlinkRoof.y > 0) this.starlink.copy(this.starlinkRoof)
+    else if (this.starlink.y === 0) this.starlink.set(36, 18, 170)
     while (this.chargers.length < 3) {
       const spot = this.openSpot(-150 + this.chargers.length * 22, 20, () => 0.35)
       spot.y = 1.5
@@ -588,33 +740,53 @@ export class City {
     this.dataBeam = this.raiseColumn(this.resetPad.x, 0, this.resetPad.z, '#ffb15a', 46)
     this.starBeam = this.raiseColumn(this.starlink.x, this.starlink.y, this.starlink.z, '#c5ddff', 58)
     this.chargerBeams = this.chargers.map((post) => this.raiseColumn(post.x, 0, post.z, '#f4f4f2', 24))
-    const support = new THREE.Mesh(
-      new THREE.PlaneGeometry(9, 3.4),
-      new THREE.MeshBasicMaterial({
-        map: billboardTexture('NEURALINK', 'WE SUPPORT NEURALINK', '#d7ecff'),
-        side: THREE.DoubleSide,
-      }),
-    )
-    support.position.set(this.neuralink.x, 4.2, this.neuralink.z)
-    this.group.add(support)
   }
 
   private addOfficeRow(at: THREE.Vector3): void {
     const offices = [
-      { name: 'GROK BOT', line: 'THE COURIER', ink: '#f4f1ea' },
-      { name: 'CURSOR', line: 'THE EDITOR', ink: '#d7ecff' },
-      { name: 'DATACENTER', line: 'THE GRID', ink: '#ffb15a' },
+      { name: 'GROK BOT', line: 'Understand the universe', ink: '#f4f1ea', body: 0x14161c, glass: 0xc9a27a },
+      { name: 'CURSOR', line: 'The AI code editor', ink: '#d7ecff', body: 0x1a1e24, glass: 0x9ec4de },
+      { name: 'DATACENTER', line: 'The training halls', ink: '#ffb15a', body: 0x8d9298, glass: 0x6a7278 },
     ]
     offices.forEach((office, i) => {
-      const board = new THREE.Mesh(
-        new THREE.PlaneGeometry(7.2, 3),
-        new THREE.MeshBasicMaterial({
-          map: billboardTexture(office.name, office.line, office.ink),
-          side: THREE.DoubleSide,
-        }),
-      )
-      board.position.set(at.x + (i - 1) * 8.2, 3.4, at.z)
-      this.group.add(board)
+      const x = at.x + (i - 1) * 9.2
+      let z = at.z - 5.5
+      for (let n = 0; n < 6 && this.insideBuilding(x, z, 2.4); n++) z -= 3
+      const h = 8.4
+      const clad = i === 0 ? 'night' : i === 1 ? 'link' : 'shed'
+      const body = cladMaterial(clad, 2, 2, i === 2 ? '#ffb15a' : '#d7ecff', 0.45)
+      const glass = new THREE.MeshStandardMaterial({
+        color: office.glass,
+        roughness: 0.12,
+        metalness: 0.4,
+        emissive: new THREE.Color(office.glass),
+        emissiveIntensity: 0.45,
+      })
+      this.boxSolid(820 + i, 7.4, h, 5.2, x, h / 2, z, body)
+      const band = new THREE.Mesh(new THREE.BoxGeometry(7.1, 1.3, 0.12), glass)
+      band.position.set(x, 3.2, z + 2.66)
+      this.group.add(band)
+      if (i === 2) {
+        for (let k = 0; k < 3; k++) {
+          const chiller = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.5), body)
+          chiller.position.set(x - 2 + k * 2, h + 0.55, z)
+          this.group.add(chiller)
+        }
+      }
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.12), glass)
+      door.position.set(x, 1.35, z + 2.68)
+      this.group.add(door)
+      this.addWordmark(x, 6.15, z + 2.78, 6.8, 3.4, office.name, office.line, office.ink, 0)
+      this.blocks.push({
+        id: 820 + i,
+        x,
+        z,
+        w: 7.4,
+        d: 5.2,
+        h,
+        boxes: [new THREE.Box3(new THREE.Vector3(x - 3.7, 0, z - 2.6), new THREE.Vector3(x + 3.7, h, z + 2.6))],
+      })
+      this.addRoofAnchors(820 + i, x, z, 7.4, 5.2, h, true)
     })
   }
 
@@ -1068,69 +1240,439 @@ export class City {
     return bulb
   }
 
-  private addStarship(): void {
-    const steel = new THREE.MeshStandardMaterial({
-      color: 0xd7dbdf,
-      metalness: 0.94,
-      roughness: 0.24,
-      emissive: new THREE.Color('#aeb6bf'),
-      emissiveIntensity: 0.18,
+  private boxSolid(
+    id: number,
+    w: number,
+    h: number,
+    d: number,
+    x: number,
+    y: number,
+    z: number,
+    material: THREE.Material | THREE.Material[],
+  ): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    mesh.position.set(x, y, z)
+    mesh.userData.buildingId = id
+    mesh.receiveShadow = true
+    this.group.add(mesh)
+    this.solids.push(mesh)
+    return mesh
+  }
+
+  private addWordmark(
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    title: string,
+    line: string,
+    ink: string,
+    yaw: number,
+    bg?: string,
+  ): void {
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({
+        map: billboardTexture(title, line, ink, bg),
+        side: THREE.DoubleSide,
+      }),
+    )
+    sign.position.set(x, y, z)
+    sign.rotation.y = yaw
+    this.group.add(sign)
+  }
+
+  private buildCompany(site: CompanySite, id: number, x: number, z: number): void {
+    if (site === 'launch') {
+      this.addLaunchPad(id, x, z)
+      return
+    }
+    const ink = new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.55, metalness: 0.4 })
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0xb7c9d6,
+      roughness: 0.08,
+      metalness: 0.45,
+      emissive: new THREE.Color('#d5e6f4'),
+      emissiveIntensity: 0.35,
     })
+    if (site === 'tesla') {
+      const w = 30
+      const h = 14
+      const d = 26
+      this.boxSolid(id, w, h, d, x, h / 2, z, cladMaterial('giga', 3, 2, '#f4f4f2', 0.22))
+      const lobby = new THREE.Mesh(new THREE.BoxGeometry(11, 8, 3.2), glass)
+      lobby.position.set(x + 8, 4, z + d / 2 + 1.2)
+      this.group.add(lobby)
+      for (let k = -2; k <= 2; k++) {
+        const dock = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.8, 0.25), ink)
+        dock.position.set(x + k * 5.2, 1.6, z - d / 2 - 0.1)
+        this.group.add(dock)
+      }
+      const stripe = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 0.4, 0.35, 0.45),
+        new THREE.MeshBasicMaterial({ color: 0xe10600 }),
+      )
+      stripe.position.set(x, h + 0.2, z + d / 2)
+      this.group.add(stripe)
+      this.addWordmark(x - 2, 9.2, z + d / 2 + 0.2, 16, 8, 'TESLA', "Accelerating the world's transition to sustainable energy", '#e10600', 0, '#f7f7f5')
+      this.finishCompany(id, x, z, w, d, h)
+      return
+    }
+    if (site === 'neuralink') {
+      const w = 22
+      const h = 9
+      const d = 14
+      this.boxSolid(id, w, h, d, x - 2, h / 2, z, cladMaterial('lab', 2, 1, '#f4f7fb', 0.2))
+      this.boxSolid(id, 10, 7, 10, x + 10, 3.5, z + 2, cladMaterial('lab', 1, 1, '#d7ecff', 0.25))
+      const band = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.35, d + 0.2), glass)
+      band.position.set(x - 2, 6.6, z)
+      this.group.add(band)
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(8, 0.14, 3.4), glass)
+      canopy.position.set(x - 2, 3.5, z + d / 2 + 1.5)
+      this.group.add(canopy)
+      this.addWordmark(x - 2, 5.4, z + d / 2 + 0.16, 14, 7, 'NEURALINK', 'Restore autonomy. Unlock human potential.', '#1a1d22', 0, '#f4f7fb')
+      this.neuralinkDoor.set(x - 2, 0, z + d / 2 + 4.2)
+      this.finishCompany(id, x - 2, z, w, d, h)
+      return
+    }
+    if (site === 'starlink') {
+      const w = 28
+      const h = 11
+      const d = 18
+      this.boxSolid(id, w, h, d, x, h / 2, z, cladMaterial('link', 3, 2, '#9ecfff', 0.4))
+      const dishMatLocal = new THREE.MeshStandardMaterial({ color: 0xe7eef5, metalness: 0.65, roughness: 0.28 })
+      const yard: Array<[number, number, number]> = []
+      for (let k = 0; k < 8; k++) yard.push([-10 + (k % 4) * 6.4, h + 1.15, k < 4 ? -3 : 3])
+      for (let k = 0; k < 5; k++) yard.push([-8 + k * 4, 1.15, d / 2 + 2.4])
+      for (const [dx, yy, dz] of yard) {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.9, 6), dishMatLocal)
+        mast.position.set(x + dx, yy - 0.45, z + dz)
+        const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.06, 12), dishMatLocal)
+        dish.rotation.x = 0.85
+        dish.position.set(x + dx, yy, z + dz)
+        this.trackers.push(dish)
+        this.group.add(mast, dish)
+      }
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(1.6, 16, 12),
+        new THREE.MeshStandardMaterial({ color: 0xf4f7fb, roughness: 0.25, metalness: 0.4 }),
+      )
+      dome.scale.y = 0.72
+      dome.position.set(x + 11, h + 1.1, z)
+      this.group.add(dome)
+      this.addWordmark(x, 7.6, z + d / 2 + 0.16, 15, 7.5, 'STARLINK', 'High-speed internet, anywhere on Earth', '#f4f7fb', 0)
+      this.starlinkRoof.set(x - 4, h + 0.2, z)
+      this.finishCompany(id, x, z, w, d, h)
+      return
+    }
+    if (site === 'x') {
+      const w = 30
+      const h = 38
+      const d = 18
+      this.boxSolid(id, w, h, d, x, h / 2, z, cladMaterial('stone', 2, 3, '#ffd2a8', 0.28))
+      const black = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.2 })
+      for (const tilt of [0.55, -0.55]) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 8.5, 0.4), black)
+        arm.position.set(x, h - 7, z + d / 2 + 0.35)
+        arm.rotation.z = tilt
+        this.group.add(arm)
+      }
+      this.addWordmark(x, 12, z + d / 2 + 0.22, 14, 7, 'X', 'The everything app', '#f7f7f7', 0)
+      this.finishCompany(id, x, z, w, d, h)
+      return
+    }
+    const w = 16
+    const h = 13
+    const d = 30
+    this.boxSolid(id, w, h, d, x, h / 2, z, cladMaterial('hall', 2, 2, '#f4f6f8', 0.18))
+    for (let k = -3; k <= 3; k++) {
+      const bay = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.4, 3.2), ink)
+      bay.position.set(x + w / 2 + 0.12, 2, z + k * 4)
+      this.group.add(bay)
+    }
+    const roofGear = new THREE.Mesh(new THREE.BoxGeometry(6, 1.4, 10), ink)
+    roofGear.position.set(x, h + 0.7, z - 6)
+    this.group.add(roofGear)
+    this.addWordmark(
+      x + w / 2 + 0.24,
+      8.4,
+      z + 2,
+      18,
+      9,
+      'SPACEX',
+      'Making life multiplanetary',
+      '#16181c',
+      -Math.PI / 2,
+      '#f4f6f8',
+    )
+    this.finishCompany(id, x, z, w, d, h)
+  }
+
+  private finishCompany(id: number, x: number, z: number, w: number, d: number, h: number): void {
+    this.blocks.push({
+      id,
+      x,
+      z,
+      w,
+      d,
+      h,
+      boxes: [new THREE.Box3(new THREE.Vector3(x - w / 2, 0, z - d / 2), new THREE.Vector3(x + w / 2, h, z + d / 2))],
+    })
+    this.addRoofAnchors(id, x, z, w, d, h, false)
+    const lip = new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.8, 0.42, d + 0.8),
+      new THREE.MeshStandardMaterial({ color: 0x2a2e33, roughness: 0.55, metalness: 0.35 }),
+    )
+    lip.position.set(x, h + 0.12, z)
+    this.group.add(lip)
+  }
+
+  private addLaunchPad(id: number, x: number, z: number): void {
+    const concrete = new THREE.MeshStandardMaterial({ color: 0xc8c4bc, roughness: 0.94, metalness: 0.02 })
+    const scorched = new THREE.MeshStandardMaterial({ color: 0x2a2623, roughness: 0.97 })
+    const steel = new THREE.MeshStandardMaterial({ color: 0xb7c0c8, metalness: 0.86, roughness: 0.24 })
+    const dark = new THREE.MeshStandardMaterial({ color: 0x23272c, metalness: 0.7, roughness: 0.4 })
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 0.32, 48), concrete)
+    pad.position.set(x, 0.16, z)
+    pad.userData.buildingId = -1
+    pad.receiveShadow = true
+    this.group.add(pad)
+    this.solids.push(pad)
+    const paint = new THREE.Mesh(
+      new THREE.RingGeometry(6.2, 7.4, 48),
+      new THREE.MeshBasicMaterial({ color: 0xe7a15a, side: THREE.DoubleSide }),
+    )
+    paint.rotation.x = -Math.PI / 2
+    paint.position.set(x, 0.34, z)
+    const inner = new THREE.Mesh(
+      new THREE.RingGeometry(2.2, 2.45, 32),
+      new THREE.MeshBasicMaterial({ color: 0xf4f4f2, side: THREE.DoubleSide }),
+    )
+    inner.rotation.x = -Math.PI / 2
+    inner.position.set(x, 0.35, z)
+    this.group.add(paint, inner)
+    const trench = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.12, 20), scorched)
+    trench.position.set(x, 0.36, z)
+    this.group.add(trench)
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.45, 2.6, 14), steel)
+      wall.position.set(x + side * 1.7, 1.5, z)
+      wall.rotation.z = side * -0.55
+      this.group.add(wall)
+    }
+    const mount = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 5.1, 0.7, 20), dark)
+    mount.position.set(x, 2.5, z)
+    const stool = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 3.6, 1.4, 16), steel)
+    stool.position.set(x, 1.6, z)
+    this.group.add(mount, stool)
+    const deluge = new THREE.Mesh(new THREE.TorusGeometry(5.4, 0.16, 8, 28), steel)
+    deluge.rotation.x = Math.PI / 2
+    deluge.position.set(x, 3.15, z)
+    this.group.add(deluge)
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 6), steel)
+      pipe.position.set(x + Math.cos(a) * 5.4, 2.5, z + Math.sin(a) * 5.4)
+      this.group.add(pipe)
+    }
+
+    const towerX = x + 10
+    const towerH = 96
+    const chords: THREE.BufferGeometry[] = []
+    const half = 1.65
+    const chordGeo = new THREE.CylinderGeometry(0.16, 0.22, towerH, 6)
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        chords.push(placeGeometry(chordGeo, towerX + sx * half, towerH / 2, z + sz * half))
+      }
+    }
+    for (let y = 4; y < towerH; y += 4.5) {
+      chords.push(placeGeometry(new THREE.BoxGeometry(half * 2, 0.14, 0.14), towerX, y, z - half))
+      chords.push(placeGeometry(new THREE.BoxGeometry(half * 2, 0.14, 0.14), towerX, y, z + half))
+      chords.push(placeGeometry(new THREE.BoxGeometry(0.14, 0.14, half * 2), towerX - half, y, z))
+      chords.push(placeGeometry(new THREE.BoxGeometry(0.14, 0.14, half * 2), towerX + half, y, z))
+      const brace = new THREE.BoxGeometry(3.6, 0.1, 0.1)
+      chords.push(placeGeometry(brace, towerX, y + 1.6, z - half, 0, 0, 0.7))
+      chords.push(placeGeometry(brace, towerX, y + 1.6, z - half, 0, 0, -0.7))
+    }
+    const tower = new THREE.Mesh(joinGeometry(chords), steel)
+    tower.userData.buildingId = id
+    this.group.add(tower)
+    this.solids.push(tower)
+    for (const armY of [42, 66]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.55, 1.15), dark)
+      arm.position.set(towerX - 2.8, armY, z)
+      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.4, 2.2), dark)
+      jaw.position.set(x + 4.7, armY, z)
+      this.group.add(arm, jaw)
+    }
+    const carriage = new THREE.Mesh(new THREE.BoxGeometry(1.4, 16, 1.6), dark)
+    carriage.position.set(towerX - 1.2, 54, z)
+    this.group.add(carriage)
+    this.addWordmark(towerX - 1.9, 28, z, 8, 4, 'SPACEX', 'Making life multiplanetary', '#f4f6f8', Math.PI / 2)
+    this.addWordmark(x - 13.5, 6.5, z, 12, 6, 'SPACEX', 'Making life multiplanetary', '#16181c', Math.PI / 2, '#f4f6f8')
+    for (const y of [18, 36, 52, 70, 88]) {
+      this.anchors.push({ point: new THREE.Vector3(towerX, y, z + 2.4), buildingId: id })
+    }
+
+    const mastMat = new THREE.MeshBasicMaterial({ color: 0xfff1c8 })
+    for (const [dx, dz] of [[-14, -14], [14, -14], [-14, 14], [14, 14]] as Array<[number, number]>) {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 36, 6), dark)
+      mast.position.set(x + dx, 18, z + dz)
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), mastMat)
+      tip.position.set(x + dx, 36.4, z + dz)
+      this.group.add(mast, tip)
+      this.anchors.push({ point: new THREE.Vector3(x + dx, 35.5, z + dz), buildingId: -2 })
+    }
+    const tankPaint = new THREE.MeshStandardMaterial({ color: 0xf7f8f8, roughness: 0.32, metalness: 0.5 })
+    const tanks = [
+      { name: 'LOX', ink: '#7eb6e0', dx: -9 },
+      { name: 'CH4', ink: '#e7a15a', dx: -5.2 },
+      { name: 'N2', ink: '#f4f4f2', dx: -1.4 },
+    ]
+    for (const tank of tanks) {
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 8.5, 14), tankPaint)
+      shell.position.set(x + tank.dx, 4.3, z - 11)
+      this.group.add(shell)
+      this.addWordmark(x + tank.dx, 5.2, z - 9.4, 2.4, 0.7, tank.name, '', tank.ink, 0, '#1a1d22')
+    }
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 3.4, 12), steel)
+    water.position.set(x + 8, 9.2, z + 11)
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 7.4, 8), dark)
+    stem.position.set(x + 8, 3.7, z + 11)
+    this.group.add(water, stem)
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2
+      if (Math.cos(a) < -0.45) continue
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.6, 5), dark)
+      post.position.set(x + Math.cos(a) * 15.2, 0.8, z + Math.sin(a) * 15.2)
+      this.group.add(post)
+    }
+    const floodA = new THREE.PointLight(0xfff1d4, 3.2, 36, 2)
+    floodA.position.set(x - 8, 18, z + 6)
+    const floodB = new THREE.PointLight(0xd7ecff, 2.2, 40, 2)
+    floodB.position.set(towerX, 70, z + 4)
+    this.padLight = new THREE.PointLight(0xffe1a8, 2.4, 16, 2)
+    this.padLight.position.set(x, 4.2, z)
+    this.group.add(floodA, floodB, this.padLight)
+    this.blocks.push({
+      id,
+      x: towerX,
+      z,
+      w: 4,
+      d: 4,
+      h: towerH,
+      boxes: [
+        new THREE.Box3(new THREE.Vector3(towerX - 2, 0, z - 2), new THREE.Vector3(towerX + 2, towerH, z + 2)),
+        new THREE.Box3(new THREE.Vector3(x - 4.8, 0, z - 4.8), new THREE.Vector3(x + 4.8, 90, z + 4.8)),
+      ],
+    })
+    this.addStarship(id, x, z)
+  }
+
+  private addStarship(id: number, x: number, z: number): void {
+    const steel = new THREE.MeshStandardMaterial({
+      color: 0xd5d9de,
+      metalness: 0.94,
+      roughness: 0.22,
+      emissive: new THREE.Color('#c5ced6'),
+      emissiveIntensity: 0.16,
+    })
+    const tile = new THREE.MeshStandardMaterial({ color: 0x16181b, metalness: 0.35, roughness: 0.78 })
     const dark = new THREE.MeshStandardMaterial({ color: 0x23272c, metalness: 0.72, roughness: 0.38 })
     const ship = new THREE.Group()
-    const hull = new THREE.Mesh(new THREE.CylinderGeometry(3.05, 3.35, 38, 24), steel)
-    hull.position.y = 19
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(3.05, 11, 24), steel)
-    nose.position.y = 43.5
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(3.38, 3.38, 0.35, 24), dark)
-    band.position.y = 28
-    const flapGeo = new THREE.BoxGeometry(0.28, 8, 3.4)
-    const flapL = new THREE.Mesh(flapGeo, dark)
-    flapL.position.set(-3.7, 11, 0.2)
-    flapL.rotation.z = 0.18
-    const flapR = flapL.clone()
-    flapR.position.x = 3.7
-    flapR.rotation.z = -0.18
-    const finL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 5.2, 2.6), dark)
-    finL.position.set(-3.4, 34, 0)
-    const finR = finL.clone()
-    finR.position.x = 3.4
+    const booster = new THREE.Mesh(new THREE.CylinderGeometry(4.05, 4.2, 40, 28), steel)
+    booster.position.y = 22
+    booster.userData.buildingId = id
+    const bands = [8, 15, 22, 29, 36, 41.4].map((y) => placeGeometry(new THREE.CylinderGeometry(4.28, 4.28, 0.22, 28), 0, y, 0))
+    const bandMesh = new THREE.Mesh(joinGeometry(bands), dark)
+    const fins: THREE.BufferGeometry[] = []
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4
+      fins.push(placeGeometry(new THREE.BoxGeometry(2.6, 3.1, 0.16), Math.cos(a) * 5.4, 37.2, Math.sin(a) * 5.4, 0.2, -a, 0))
+    }
+    const finMesh = new THREE.Mesh(joinGeometry(fins), dark)
+    const bellGeo = new THREE.CylinderGeometry(0.26, 0.52, 1.25, 8)
+    const bells: THREE.BufferGeometry[] = []
+    const spots: Array<[number, number]> = [[0, 0]]
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      spots.push([Math.cos(a) * 1.45, Math.sin(a) * 1.45])
+    }
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + 0.15
+      spots.push([Math.cos(a) * 2.7, Math.sin(a) * 2.7])
+    }
+    for (const [gx, gz] of spots) {
+      bells.push(placeGeometry(bellGeo, gx, 1.05, gz))
+      const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 6, 5),
+        new THREE.MeshBasicMaterial({ color: 0xfff3c8 }),
+      )
+      glow.position.set(gx, 0.2, gz)
+      this.engineGlows.push(glow)
+      ship.add(glow)
+    }
+    const bellMesh = new THREE.Mesh(joinGeometry(bells), dark)
+    const inter = new THREE.Mesh(new THREE.CylinderGeometry(3.45, 4.15, 2.4, 24), dark)
+    inter.position.y = 43
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(3.15, 3.4, 30, 24), steel)
+    hull.position.y = 59
+    hull.userData.buildingId = id
+    const belly = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.48, 3.62, 28, 18, 1, true, 0.15, Math.PI * 0.9),
+      tile,
+    )
+    belly.position.y = 59
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(3.15, 11, 24), steel)
+    nose.position.y = 79.5
+    const header = new THREE.Mesh(new THREE.CylinderGeometry(3.22, 3.22, 0.45, 24), dark)
+    header.position.y = 70
+    const flapGeo = new THREE.BoxGeometry(0.2, 7.4, 3.2)
+    const flaps = [
+      [-3.7, 50, 0.22],
+      [3.7, 50, -0.22],
+      [-3.35, 71, 0.16],
+      [3.35, 71, -0.16],
+    ].map(([px, py, rz]) => {
+      const flap = new THREE.Mesh(flapGeo, tile)
+      flap.position.set(px, py, 0.15)
+      flap.rotation.z = rz
+      return flap
+    })
     const glass = new THREE.MeshStandardMaterial({
       color: 0x1a2430,
       metalness: 0.2,
       roughness: 0.12,
       emissive: new THREE.Color('#9ecfff'),
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 0.45,
     })
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2
-      const win = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.42), glass)
-      win.position.set(Math.sin(a) * 3.28, 24, Math.cos(a) * 3.28)
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.85, 0.5), glass)
+      win.position.set(Math.sin(a) * 3.32, 66, Math.cos(a) * 3.32)
       win.rotation.y = a
       ship.add(win)
     }
-    ship.add(hull, nose, band, flapL, flapR, finL, finR)
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2
-      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, 1.7, 12), dark)
-      bell.position.set(Math.cos(a) * 1.35, 0.3, Math.sin(a) * 1.35)
-      const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(0.38, 8, 6),
-        new THREE.MeshBasicMaterial({ color: 0xfff3c8 }),
-      )
-      glow.position.set(bell.position.x, -0.55, bell.position.z)
-      this.engineGlows.push(glow)
-      ship.add(bell, glow)
-    }
     const mark = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 2.4),
+      new THREE.PlaneGeometry(7, 1.8),
       new THREE.MeshBasicMaterial({ map: signTexture('SPACEX', '#f4f6f8'), side: THREE.DoubleSide }),
     )
-    mark.position.set(0, 22, 3.4)
-    ship.add(mark)
-    ship.position.set(24, 28, 188)
+    mark.position.set(0, 24, 4.35)
+    const shipMark = mark.clone()
+    shipMark.position.set(0, 62, 3.45)
+    ship.add(booster, bandMesh, finMesh, bellMesh, inter, hull, belly, nose, header, mark, shipMark, ...flaps)
+    ship.position.set(x, 3.4, z)
+    this.solids.push(booster, hull)
     this.group.add(ship)
+    this.anchors.push(
+      { point: new THREE.Vector3(x, 88, z), buildingId: id },
+      { point: new THREE.Vector3(x + 5.6, 41, z), buildingId: id },
+      { point: new THREE.Vector3(x - 5.6, 41, z), buildingId: id },
+    )
   }
+
 
   private addCars(rng: () => number): void {
     const colors = [0xf4f4f2, 0xc8cbcf, 0x1b1e22, 0x8d1e24, 0x163a66, 0xe4e0d8]
@@ -1252,9 +1794,11 @@ export class City {
       mat.opacity = 0.1 + Math.sin(time * 2.4 + beam.position.x * 0.05) * 0.06
     }
     for (const glow of this.engineGlows) {
-      const s = 0.82 + Math.sin(time * 7 + glow.position.x) * 0.22
+      const s = 0.82 + Math.sin(time * 7 + glow.position.x * 3 + glow.position.z) * 0.22
       glow.scale.setScalar(s)
     }
+    if (this.padLight) this.padLight.intensity = 2.1 + Math.sin(time * 2.5) * 0.45
+    for (const dish of this.trackers) dish.rotation.y += dt * 0.2
     if (this.dish && this.dishLive) this.dish.rotation.y += dt * 0.6
   }
 

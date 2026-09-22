@@ -33,7 +33,7 @@ const CITIZENS: Line[][] = [
   ],
   [
     { speaker: '', text: 'Antenna Ward clicks all night. I sleep with the window shut and still hear it.' },
-    { speaker: '', text: 'There is a pad on a north roof that stays cold until the relays agree. I have never been invited.' },
+    { speaker: '', text: 'South edge is a real pad. White SpaceX hall across the street, steel ship on the trench.' },
   ],
   [
     { speaker: '', text: 'You can land on the roofs. The landlords pretend not to know.' },
