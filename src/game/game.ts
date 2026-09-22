@@ -60,6 +60,9 @@ export class Game {
   private talk: Talk | null = null
   private talked = new Set<string>()
   private maraUsed = false
+  private datacenterDone = false
+  private starlinkDone = false
+  private chargersDone = [false, false, false]
   private slingText = ''
   private slingLife = 0
   private hintLife = 18
@@ -201,6 +204,9 @@ export class Game {
       this.entities.restore(this.city.beacons.map(() => false))
       this.talked.clear()
       this.maraUsed = false
+      this.datacenterDone = false
+      this.starlinkDone = false
+      this.chargersDone = [false, false, false]
       this.checkpoint = this.snap()
     } else {
       this.score = this.checkpoint.score
@@ -269,8 +275,17 @@ export class Game {
     this.stage.follow(this.player.pos.x, this.player.pos.y, this.player.pos.z)
     this.poseCable()
     if (this.slingLife > 0) this.slingLife -= dt
+    const lineDist = this.player.swinging
+      ? Math.hypot(this.player.pos.x - this.player.anchor.x, this.player.pos.y + 1 - this.player.anchor.y, this.player.pos.z - this.player.anchor.z)
+      : 0
+    const taut = this.player.swinging ? Math.max(0, Math.min(1, 1 - Math.max(0, this.player.rope - lineDist) / 6)) : 0
     this.audio.update({
       speed: simulate ? this.player.speed : 0,
+      vy: simulate ? this.player.vel.y : 0,
+      taut,
+      swinging: simulate && this.player.swinging,
+      zipping: simulate && this.player.zipping && this.player.swinging,
+      sling: simulate && this.player.slingWindow,
       plaza: Math.hypot(this.player.pos.x, this.player.pos.z),
       drone: this.entities.closestDrone,
       active: this.mode !== 'menu',
@@ -296,7 +311,10 @@ export class Game {
     }
     if (flags.hardLand && this.player.invuln <= 0) this.hurt()
 
-    if (input.talk && !usedTalk) {
+    if (this.mission) this.touchChargers()
+    if (input.talk && !usedTalk && this.tryConsole()) {
+      // the roof button takes the press
+    } else if (input.talk && !usedTalk) {
       const npc = this.crowd.nearest(this.player.pos.x, this.player.pos.y, this.player.pos.z, this.player.grounded, this.player.speed)
       if (npc) this.openTalk(npc)
     }
@@ -462,11 +480,18 @@ export class Game {
       for (const seg of this.cableSegs) seg.visible = false
       for (const seg of this.glowSegs) seg.visible = false
     }
+    const hot = this.player.slingWindow
+    const line = this.cableSegs[0]?.material as THREE.MeshBasicMaterial | undefined
+    const haze = this.glowSegs[0]?.material as THREE.MeshBasicMaterial | undefined
+    if (line) line.color.set(hot ? '#ffe7c4' : '#f4fdff')
+    if (haze) haze.color.set(hot ? '#e7a15a' : '#bdf6ff')
     const preview = Boolean(this.player.preview) && this.mode === 'play'
     this.marker.visible = Boolean(preview)
     if (preview && this.player.preview) {
       this.marker.position.copy(this.player.preview.point)
       this.marker.rotation.y += 0.02
+      const mark = this.marker.material as THREE.MeshBasicMaterial
+      mark.color.set(hot ? '#e7a15a' : '#9be7ff')
     }
   }
 
@@ -497,8 +522,56 @@ export class Game {
     out.addScaledVector(b, t * t)
   }
 
-  private objective(): { text: string; detail: string; pos: THREE.Vector3 } {
-    if (!this.mission) return { text: 'Speak with Nia Voss', detail: 'She is in the plaza, under you.', pos: this.city.nia }
+  private nearSite(at: THREE.Vector3, reach: number, onFoot: boolean): boolean {
+    const dxz = Math.hypot(this.player.pos.x - at.x, this.player.pos.z - at.z)
+    const dy = Math.abs(this.player.pos.y - at.y)
+    if (onFoot) return this.player.grounded && dxz < reach && dy < 2.4
+    return dxz < reach && dy < 12
+  }
+
+  private touchChargers(): void {
+    this.city.chargers.forEach((post, i) => {
+      if (this.chargersDone[i] || !this.nearSite(post, 3.8, false)) return
+      this.chargersDone[i] = true
+      this.city.lightCharger(i)
+      const n = this.chargersDone.filter(Boolean).length
+      this.score += 280
+      this.audio.pickup(n)
+      this.hud.toast(n === 3 ? 'Tesla row is live.' : `Charger ${n}/3`)
+    })
+  }
+
+  private tryConsole(): boolean {
+    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 2.6, true)) {
+      this.datacenterDone = true
+      this.city.sealConsole('data')
+      this.score += 800
+      this.audio.beacon()
+      this.crowd.disperseProtest()
+      this.hud.toast('Reset taken. The crowd breaks up.')
+      return true
+    }
+    if (!this.starlinkDone && this.nearSite(this.city.starlink, 2.6, true)) {
+      this.starlinkDone = true
+      this.city.sealConsole('star')
+      this.score += 800
+      this.audio.beacon()
+      this.hud.toast('Starlink dish is aimed again.')
+      return true
+    }
+    return false
+  }
+
+  private usePrompt(): string {
+    if (!this.mission || !this.player.grounded) return ''
+    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 2.6, true)) return 'E   Reset'
+    if (!this.starlinkDone && this.nearSite(this.city.starlink, 2.6, true)) return 'E   Realign'
+    return ''
+  }
+
+  private objective(): { text: string; detail: string; pos: THREE.Vector3; color: string } {
+    const colors = ['#9be7ff', '#ffb15a', '#ff7a4a', '#c9b6ff']
+    if (!this.mission) return { text: 'Speak with Nia Voss', detail: 'She is in the plaza, under you.', pos: this.city.nia, color: '#9be7ff' }
     let nearest = -1
     let best = Infinity
     this.entities.captured.forEach((done, i) => {
@@ -510,15 +583,50 @@ export class Game {
         nearest = i
       }
     })
+    const lit = this.entities.captured.filter(Boolean).length
+    const jobs: { text: string; detail: string; pos: THREE.Vector3; color: string; d: number }[] = []
     if (nearest >= 0) {
       const beacon = this.city.beacons[nearest]
-      return { text: `Light the ${beacon.name} relay`, detail: `${Math.round(best)} m`, pos: beacon.position }
+      jobs.push({
+        text: `Light the ${beacon.name} relay`,
+        detail: `${lit}/4 · ${Math.round(best)} m`,
+        pos: beacon.position,
+        color: colors[nearest] ?? '#9be7ff',
+        d: best,
+      })
     }
-    const d = Math.hypot(this.city.extract.x - this.player.pos.x, this.city.extract.z - this.player.pos.z)
-    return { text: 'Reach the extract pad', detail: `${Math.round(d)} m · Glass Mile roof`, pos: this.city.extract }
+    if (!this.datacenterDone) {
+      const d = Math.hypot(this.city.datacenter.x - this.player.pos.x, this.city.datacenter.z - this.player.pos.z)
+      jobs.push({ text: 'Reset the datacenter', detail: `${Math.round(d)} m · E on the roof`, pos: this.city.datacenter, color: '#ffb15a', d })
+    }
+    if (!this.starlinkDone) {
+      const d = Math.hypot(this.city.starlink.x - this.player.pos.x, this.city.starlink.z - this.player.pos.z)
+      jobs.push({ text: 'Realign the Starlink dish', detail: `${Math.round(d)} m · E on the roof`, pos: this.city.starlink, color: '#c5ddff', d })
+    }
+    if (this.chargersDone.some((done) => !done)) {
+      let d = Infinity
+      let pos = this.city.chargers[0]
+      this.city.chargers.forEach((post, i) => {
+        if (this.chargersDone[i]) return
+        const dist = Math.hypot(post.x - this.player.pos.x, post.z - this.player.pos.z)
+        if (dist < d) {
+          d = dist
+          pos = post
+        }
+      })
+      const n = this.chargersDone.filter(Boolean).length
+      jobs.push({ text: 'Light the Tesla row', detail: `${n}/3 · ${Math.round(d)} m · Lantern Row`, pos, color: '#f4f4f2', d })
+    }
+    if (nearest < 0) {
+      const d = Math.hypot(this.city.extract.x - this.player.pos.x, this.city.extract.z - this.player.pos.z)
+      jobs.push({ text: 'Reach the extract pad', detail: `4/4 · ${Math.round(d)} m · Glass Mile roof`, pos: this.city.extract, color: '#e7a15a', d })
+    }
+    jobs.sort((a, b) => a.d - b.d)
+    const job = jobs[0]
+    return { text: job.text, detail: job.detail, pos: job.pos, color: job.color }
   }
 
-  private screenMarker(pos: THREE.Vector3): { x: number; y: number; text: string } | null {
+  private screenMarker(pos: THREE.Vector3, text: string, color: string): { x: number; y: number; text: string; color: string } | null {
     this.proj.copy(pos).project(this.stage.camera)
     const behind = this.proj.z > 1
     if (behind) {
@@ -534,7 +642,8 @@ export class Game {
     return {
       x: (this.proj.x * 0.5 + 0.5) * window.innerWidth,
       y: (-this.proj.y * 0.5 + 0.5) * window.innerHeight,
-      text: this.objective().text,
+      text,
+      color,
     }
   }
 
@@ -566,8 +675,9 @@ export class Game {
       integrity: this.integrity,
       objective: goal.text,
       detail: goal.detail,
+      relays: this.mission ? this.entities.captured.slice() : [],
       clock: this.mission ? formatTime(this.stats.seconds) : '',
-      prompt: npc ? `E   ${npc.name}` : '',
+      prompt: this.usePrompt() || (npc ? `E   ${npc.name}` : ''),
       hint: this.mode === 'play' && this.hintLife > 0 ? 'Hold left mouse or F · release at the bottom · Shift zip · C dive' : '',
       sling: this.slingLife > 0 ? this.slingText : '',
       slingWindow: this.player.slingWindow,
@@ -576,7 +686,7 @@ export class Game {
         ? `${this.player.swinging ? 'swing' : this.player.grounded ? 'ground' : 'air'}  ${this.player.speed.toFixed(1)} m/s  rope ${this.player.rope.toFixed(1)}`
         : '',
       barks,
-      marker: this.mode === 'play' ? this.screenMarker(goal.pos) : null,
+      marker: this.mode === 'play' ? this.screenMarker(goal.pos, goal.text, goal.color) : null,
       dialogue: this.talk && line
         ? { name: line.speaker || this.talk.npc.name, role: this.talk.role, text: line.text, last: this.talk.index === this.talk.lines.length - 1 }
         : null,

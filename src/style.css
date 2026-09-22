@@ -122,6 +122,9 @@ dd { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
 .objective { text-align: center; }
 #obj-text { margin: 0; font-family: Syne, sans-serif; font-size: 22px; }
 #obj-detail { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+#relays { display: flex; gap: 8px; justify-content: center; min-height: 8px; margin-top: 8px; }
+#relays span { width: 28px; height: 4px; background: rgba(239, 234, 226, 0.22); }
+#relays span.lit { background: var(--amber); box-shadow: 0 0 10px rgba(231, 161, 90, 0.8); }
 .scoreblock { text-align: right; }
 #score { margin: 0; font-family: Syne, sans-serif; font-size: 28px; }
 #combo { margin: 0; color: var(--amber); min-height: 1.2em; }

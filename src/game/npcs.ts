@@ -30,6 +30,28 @@ const LAST = ['Adeyemi', 'Berg', 'Cho', 'Dutta', 'Elsayed', 'Ferreira', 'Ghosh',
 
 const COATS = [0xc4553a, 0x3e6d8c, 0xd8c7a1, 0x2f6b52, 0x8a4e78, 0x4d5560, 0xc9843a, 0x1f3d4d]
 
+function placard(text: string): THREE.Mesh {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 128
+  const g = canvas.getContext('2d')!
+  g.fillStyle = '#f4f1ea'
+  g.fillRect(0, 0, 256, 128)
+  g.fillStyle = '#1a120e'
+  g.font = '700 40px Outfit, Segoe UI, sans-serif'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  g.fillText(text, 128, 64)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.72, 0.36),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }),
+  )
+  board.position.set(0.05, 1.42, 0.32)
+  return board
+}
+
 type Silhouette = 'crowd' | 'nia' | 'jun' | 'ivo' | 'mara'
 
 function person(color: number, ring: boolean, kind: Silhouette = 'crowd'): { group: THREE.Group; head: THREE.Object3D; legL: THREE.Object3D; legR: THREE.Object3D } {
@@ -50,7 +72,12 @@ function person(color: number, ring: boolean, kind: Silhouette = 'crowd'): { gro
   legR.position.set(0.08, 0.42, 0)
   legL.castShadow = true
   legR.castShadow = true
-  group.add(body, head, legL, legR)
+  const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.12, 0.22), coat)
+  shoulder.position.y = body.position.y + tall * 0.28
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), dark)
+  hair.position.y = head.position.y + 0.04
+  hair.scale.set(1, 0.55, 1)
+  group.add(body, head, legL, legR, shoulder, hair)
   if (kind === 'nia') {
     const collar = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.22), dark)
     collar.position.y = body.position.y + 0.28
@@ -109,6 +136,15 @@ export class Crowd {
     this.addNamed('jun', 'Jun Park', city.jun, 0x3e6d8c, 1, 'jun')
     this.addNamed('ivo', 'Ivo Pell', city.ivo, 0xc9843a, 2, 'ivo')
     this.addNamed('mara', 'Mara Ell', city.mara, 0xc4553a, 3, 'mara')
+    const protestNames = ['Ren', 'Sol', 'Kit', 'Ames', 'Noor', 'Pia']
+    for (let i = 0; i < protestNames.length; i++) {
+      const pos = city.protest.clone()
+      pos.x += (i - 2.5) * 1.15
+      pos.z += (i % 2) * 0.85
+      this.addNamed(`protest${i}`, protestNames[i], pos, COATS[i % COATS.length], 30 + i, 'crowd')
+      const signs = ['DATACENTER', 'RESET IT', 'OUR GRID', 'NO QUIET', 'LIGHTS', 'OUTSIDE']
+      this.npcs[this.npcs.length - 1].group.add(placard(signs[i]))
+    }
     this.addPair('lale', 'Lale', 'Rafi', new THREE.Vector3(-14, 0, 22), 4)
     this.addPair('nori', 'Nori', 'Pavel', new THREE.Vector3(18, 0, -16), 6)
 
@@ -184,6 +220,19 @@ export class Crowd {
     other.id = id
     partner.yaw = 0
     other.yaw = Math.PI
+  }
+
+  disperseProtest(): void {
+    for (const npc of this.npcs) {
+      if (!npc.id.startsWith('protest')) continue
+      const away = npc.pos.clone()
+      away.x += 24
+      away.z += 10
+      npc.path = [npc.pos.clone(), away]
+      npc.cursor = 1
+      npc.speed = 1.7
+    }
+    this.barks.push({ text: 'The reset took. We are leaving.', world: this.npcs.find((n) => n.id === 'protest0')?.pos.clone().setY(2.1) ?? new THREE.Vector3(), life: 2.4 })
   }
 
   mount(scene: THREE.Scene): void {

@@ -7,6 +7,9 @@ export class AudioBus {
   private fountainGain: GainNode | null = null
   private droneGain: GainNode | null = null
   private droneOsc: OscillatorNode | null = null
+  private lineOsc: OscillatorNode | null = null
+  private lineGain: GainNode | null = null
+  private lineFilter: BiquadFilterNode | null = null
   volume = 0.75
   private started = false
 
@@ -108,12 +111,33 @@ export class AudioBus {
     this.droneOsc = droneOsc
     this.droneGain = droneGain
 
+    const lineOsc = ctx.createOscillator()
+    lineOsc.type = 'triangle'
+    lineOsc.frequency.value = 86
+    const lineFilter = ctx.createBiquadFilter()
+    lineFilter.type = 'lowpass'
+    lineFilter.frequency.value = 320
+    const lineGain = ctx.createGain()
+    lineGain.gain.value = 0
+    lineOsc.connect(lineFilter)
+    lineFilter.connect(lineGain)
+    lineGain.connect(master)
+    lineOsc.start()
+    this.lineOsc = lineOsc
+    this.lineGain = lineGain
+    this.lineFilter = lineFilter
+
     this.started = true
     void ctx.resume()
   }
 
   update(state: {
     speed: number
+    vy: number
+    taut: number
+    swinging: boolean
+    zipping: boolean
+    sling: boolean
     plaza: number
     drone: number
     active: boolean
@@ -132,15 +156,39 @@ export class AudioBus {
     this.droneGain.gain.setTargetAtTime(drone, t, 0.2)
     this.humGain.gain.setTargetAtTime(state.active ? 0.016 * quiet : 0.0, t, 0.4)
     if (this.droneOsc) this.droneOsc.frequency.setTargetAtTime(70 + Math.min(18, state.drone * 0.1), t, 0.3)
+    this.voiceLine(state, hear, quiet, t)
+  }
+
+  private voiceLine(
+    state: { speed: number; vy: number; taut: number; swinging: boolean; zipping: boolean; sling: boolean },
+    hear: number,
+    quiet: number,
+    t: number,
+  ): void {
+    if (!this.lineOsc || !this.lineGain || !this.lineFilter) return
+    const fall = Math.max(0, -state.vy)
+    const rise = Math.max(0, state.vy)
+    const pitch = 74 + fall * 4.1 - rise * 1.4 + state.speed * 0.28 + (state.sling ? 36 : 0) + (state.zipping ? 28 : 0)
+    const level = state.swinging
+      ? (0.01 + state.taut * 0.016 + (state.sling ? 0.012 : 0) + (state.zipping ? 0.01 : 0)) * hear * quiet
+      : 0
+    this.lineOsc.frequency.setTargetAtTime(Math.max(60, Math.min(420, pitch)), t, state.sling ? 0.04 : 0.09)
+    this.lineFilter.frequency.setTargetAtTime(240 + state.taut * 620 + (state.zipping ? 280 : 0), t, 0.08)
+    this.lineGain.gain.setTargetAtTime(level, t, state.swinging ? 0.05 : 0.12)
   }
 
   attach(): void {
-    this.noiseBurst(0.09, 420, 0.035)
-    this.tone(150, 0.08, 0.02, 'sine')
+    this.noiseBurst(0.07, 680, 0.04)
+    this.tone(196, 0.09, 0.026, 'triangle')
+    this.tone(294, 0.12, 0.012, 'sine')
   }
 
   release(perfect: boolean): void {
-    this.noiseBurst(perfect ? 0.16 : 0.1, perfect ? 520 : 360, perfect ? 0.04 : 0.028)
+    this.noiseBurst(perfect ? 0.18 : 0.1, perfect ? 740 : 360, perfect ? 0.045 : 0.026)
+    if (perfect) {
+      this.tone(247, 0.16, 0.03, 'triangle')
+      this.tone(370, 0.22, 0.016, 'sine')
+    }
   }
 
   whiff(): void {
@@ -148,7 +196,8 @@ export class AudioBus {
   }
 
   zip(): void {
-    this.noiseBurst(0.12, 300, 0.03)
+    this.noiseBurst(0.1, 520, 0.034)
+    this.sweep(180, 420, 0.14, 0.02)
   }
 
   pickup(step: number): void {

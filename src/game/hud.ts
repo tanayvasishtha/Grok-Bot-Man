@@ -10,6 +10,7 @@ export type HudView = {
   integrity: number
   objective: string
   detail: string
+  relays: boolean[]
   clock: string
   prompt: string
   hint: string
@@ -18,7 +19,7 @@ export type HudView = {
   anchorHot: boolean
   debug: string
   barks: { x: number; y: number; text: string }[]
-  marker: { x: number; y: number; text: string } | null
+  marker: { x: number; y: number; text: string; color: string } | null
   dialogue: { name: string; role: string; text: string; last: boolean } | null
   end: { title: string; copy: string; lines: string[]; win: boolean } | null
   best: string
@@ -84,6 +85,9 @@ export class Hud {
     document.getElementById('obj-kicker')!.textContent = view.district
     document.getElementById('obj-text')!.textContent = view.objective
     document.getElementById('obj-detail')!.textContent = view.detail
+    const relays = document.getElementById('relays')!
+    relays.innerHTML = view.relays.map((on) => `<span class="${on ? 'lit' : ''}"></span>`).join('')
+    relays.classList.toggle('hidden', view.relays.length === 0)
     document.getElementById('score')!.textContent = formatScore(view.score)
     const combo = document.getElementById('combo')!
     combo.textContent = view.combo > 1 ? `${view.combo}×` : ''
@@ -114,6 +118,7 @@ export class Hud {
       marker.classList.remove('hidden')
       marker.style.left = `${view.marker.x}px`
       marker.style.top = `${view.marker.y}px`
+      marker.style.color = view.marker.color
       marker.textContent = view.marker.text
     } else marker.classList.add('hidden')
 

@@ -26,7 +26,9 @@ export class Entities {
   captured: boolean[]
   extractOpen = false
   private beams: THREE.Mesh[] = []
+  private cores: THREE.Mesh[] = []
   private rings: THREE.Mesh[] = []
+  private readonly wardColor = ['#9be7ff', '#ffb15a', '#ff7a4a', '#c9b6ff']
   private drones: Drone[] = []
   private orbs: Orb[] = []
   private logits: Logit[] = []
@@ -44,26 +46,39 @@ export class Entities {
   constructor(private city: City) {
     this.captured = city.beacons.map(() => false)
     city.beacons.forEach((beacon, i) => {
+      const color = this.wardColor[i] ?? '#9be7ff'
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(3.3, 0.08, 10, 28),
-        new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.9 }),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }),
       )
       ring.position.copy(beacon.position)
       const beam = new THREE.Mesh(
         new THREE.CylinderGeometry(0.35, 1.4, 90, 10, 1, true),
         new THREE.MeshBasicMaterial({
-          color: 0x9be7ff,
+          color,
           transparent: true,
-          opacity: 0.11,
+          opacity: 0.08,
           side: THREE.DoubleSide,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         }),
       )
       beam.position.set(beacon.position.x, 45, beacon.position.z)
-      this.group.add(ring, beam)
+      const core = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.07, 90, 6),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.35,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      )
+      core.position.copy(beam.position)
+      this.group.add(ring, beam, core)
       this.rings.push(ring)
       this.beams.push(beam)
+      this.cores.push(core)
       if (i > 0) this.spawnDrone(beacon.position, i)
     })
 
@@ -192,12 +207,38 @@ export class Entities {
   ): WorldEvent[] {
     const events: WorldEvent[] = []
     const time = performance.now() * 0.001
+    let nearest = -1
+    let nearestD = Infinity
+    this.city.beacons.forEach((beacon, i) => {
+      if (this.captured[i]) return
+      const d = Math.hypot(beacon.position.x - body.x, beacon.position.z - body.z)
+      if (d < nearestD) {
+        nearestD = d
+        nearest = i
+      }
+    })
     this.rings.forEach((ring, i) => {
       const beacon = this.city.beacons[i]
       ring.rotation.y += dt * 0.4
       ring.rotation.z = Math.sin(time + i) * 0.08
-      const mat = ring.material as THREE.MeshBasicMaterial
-      if (this.captured[i]) mat.color.set('#e7a15a')
+      const ringMat = ring.material as THREE.MeshBasicMaterial
+      const beamMat = this.beams[i].material as THREE.MeshBasicMaterial
+      const coreMat = this.cores[i].material as THREE.MeshBasicMaterial
+      if (this.captured[i]) {
+        ringMat.color.set('#e7a15a')
+        beamMat.color.set('#e7a15a')
+        coreMat.color.set('#ffe7c2')
+        beamMat.opacity = 0.16
+        coreMat.opacity = 0.9
+      } else if (!mission) {
+        beamMat.opacity = 0.045
+        coreMat.opacity = 0.22
+      } else {
+        const hot = i === nearest
+        const pulse = 0.5 + Math.sin(time * (hot ? 3.4 : 1.5) + i) * 0.5
+        beamMat.opacity = hot ? 0.14 + pulse * 0.12 : 0.08
+        coreMat.opacity = hot ? 0.55 + pulse * 0.4 : 0.4
+      }
       const horiz = Math.hypot(body.x - beacon.position.x, body.z - beacon.position.z)
       const inBeam = horiz < 5.2 && body.y > 1.5 && body.y < 78
       if (!this.captured[i] && mission && inBeam) {
