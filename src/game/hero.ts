@@ -78,60 +78,70 @@ export class Hero {
     const launchMatR = launchMatL.clone()
 
     this.root.add(this.rig)
-    this.torso.position.set(0, 1.16, 0)
+    this.torso.position.set(0, 1.32, 0)
     this.rig.add(this.torso)
 
-    const pelvis = this.part(new THREE.BoxGeometry(0.28, 0.16, 0.18), shell)
-    pelvis.position.set(0, -0.22, 0)
+    const pelvis = this.part(new THREE.BoxGeometry(0.3, 0.14, 0.18), shell)
+    pelvis.position.set(0, -0.2, 0)
     this.torso.add(pelvis)
-    const waist = this.part(new THREE.CylinderGeometry(0.09, 0.1, 0.1, 10), joint)
+    const waist = this.part(new THREE.CylinderGeometry(0.07, 0.08, 0.12, 10), joint)
     waist.position.set(0, -0.08, 0)
     this.torso.add(waist)
-    const abdomen = this.part(new THREE.BoxGeometry(0.3, 0.2, 0.16), shell)
+    const abdomen = this.part(new THREE.BoxGeometry(0.24, 0.18, 0.15), shell)
     abdomen.position.set(0, 0.04, 0.01)
     this.torso.add(abdomen)
-    const chest = this.part(new THREE.BoxGeometry(0.42, 0.34, 0.2), shell)
-    chest.position.set(0, 0.28, 0.02)
+    const chest = this.part(new THREE.BoxGeometry(0.5, 0.36, 0.22), shell)
+    chest.position.set(0, 0.3, 0.02)
     this.torso.add(chest)
-    const seam = this.part(new THREE.BoxGeometry(0.06, 0.3, 0.03), joint)
-    seam.position.set(0, 0.28, 0.125)
+    const seam = this.part(new THREE.BoxGeometry(0.04, 0.32, 0.02), joint)
+    seam.position.set(0, 0.3, 0.132)
     this.torso.add(seam)
-    const collar = this.part(new THREE.BoxGeometry(0.46, 0.06, 0.18), joint)
-    collar.position.set(0, 0.46, 0)
+    const rib = this.part(new THREE.BoxGeometry(0.42, 0.025, 0.02), joint)
+    rib.position.set(0, 0.22, 0.132)
+    this.torso.add(rib)
+    const rib2 = rib.clone()
+    rib2.position.y = 0.38
+    this.torso.add(rib2)
+    const collar = this.part(new THREE.BoxGeometry(0.54, 0.07, 0.2), joint)
+    collar.position.set(0, 0.5, 0)
     this.torso.add(collar)
-    const backpack = this.part(new THREE.BoxGeometry(0.26, 0.36, 0.12), pack)
-    backpack.position.set(0, 0.26, -0.16)
+    const backpack = this.part(new THREE.BoxGeometry(0.34, 0.48, 0.15), pack)
+    backpack.position.set(0, 0.28, -0.2)
     this.torso.add(backpack)
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), screen)
-    plate.position.set(0, 0.28, -0.23)
+    const packCap = this.part(new THREE.BoxGeometry(0.26, 0.1, 0.08), joint)
+    packCap.position.set(0, 0.5, -0.22)
+    this.torso.add(packCap)
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.38), screen)
+    plate.position.set(0, 0.28, -0.286)
     plate.rotation.y = Math.PI
+    plate.scale.x = -1
     this.torso.add(plate)
 
-    this.head.position.set(0, 0.62, 0.02)
+    this.head.position.set(0, 0.68, 0.03)
     this.torso.add(this.head)
-    const neck = this.part(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 10), joint)
+    const neck = this.part(new THREE.CylinderGeometry(0.07, 0.08, 0.12, 10), joint)
     neck.position.set(0, -0.08, 0)
     this.head.add(neck)
-    const helmet = this.part(new THREE.SphereGeometry(0.16, 20, 16), shell)
-    helmet.scale.set(1, 1.08, 1.02)
+    const helmet = this.part(new THREE.SphereGeometry(0.17, 20, 16), shell)
+    helmet.scale.set(1.05, 1.12, 1.04)
     this.head.add(helmet)
-    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), screen)
-    facePlane.position.set(0, 0.01, 0.145)
+    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.24), screen)
+    facePlane.position.set(0, 0.01, 0.158)
     this.head.add(facePlane)
 
-    this.armR.position.set(-0.32, 0.4, 0)
-    this.armL.position.set(0.32, 0.4, 0)
+    this.armR.position.set(-0.36, 0.42, 0)
+    this.armL.position.set(0.36, 0.42, 0)
     this.torso.add(this.armR, this.armL)
     this.buildArm(this.armR, this.foreR, this.handR, shell, joint, launchMatR, -1)
     this.buildArm(this.armL, this.foreL, this.handL, shell, joint, launchMatL, 1)
     this.launchR = this.armR.getObjectByName('launcher') as THREE.Mesh
     this.launchL = this.armL.getObjectByName('launcher') as THREE.Mesh
 
-    this.thighR.position.set(-0.11, 1.02, 0)
-    this.thighL.position.set(0.11, 1.02, 0)
+    this.thighR.position.set(-0.13, 1.26, 0)
+    this.thighL.position.set(0.13, 1.26, 0)
     this.rig.add(this.thighR, this.thighL)
-    this.buildLeg(this.thighR, this.shinR, shell, joint)
-    this.buildLeg(this.thighL, this.shinL, shell, joint)
+    this.buildLeg(this.thighR, this.shinR, shell, joint, -1)
+    this.buildLeg(this.thighL, this.shinL, shell, joint, 1)
   }
 
   private part(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
@@ -150,74 +160,91 @@ export class Hero {
     launchMat: THREE.Material,
     side: number,
   ): void {
-    const shoulder = this.part(new THREE.SphereGeometry(0.09, 12, 10), shell)
+    const shoulder = this.part(new THREE.SphereGeometry(0.11, 12, 10), shell)
     arm.add(shoulder)
-    const upper = this.part(new THREE.CapsuleGeometry(0.048, 0.36, 4, 8), shell)
+    const pauldron = this.part(new THREE.BoxGeometry(0.16, 0.08, 0.14), shell)
+    pauldron.position.set(side * 0.04, 0.06, 0.02)
+    arm.add(pauldron)
+    const upper = this.part(new THREE.CapsuleGeometry(0.055, 0.38, 4, 8), shell)
     upper.rotation.x = Math.PI / 2
-    upper.position.z = 0.24
+    upper.position.z = 0.26
     arm.add(upper)
-    const elbow = this.part(new THREE.SphereGeometry(0.055, 10, 8), joint)
-    elbow.position.z = 0.46
+    const elbow = this.part(new THREE.SphereGeometry(0.065, 10, 8), joint)
+    elbow.position.z = 0.5
     arm.add(elbow)
-    fore.position.z = 0.46
+    fore.position.z = 0.5
     arm.add(fore)
-    const lower = this.part(new THREE.CapsuleGeometry(0.04, 0.32, 4, 8), shell)
+    const lower = this.part(new THREE.CapsuleGeometry(0.046, 0.34, 4, 8), shell)
     lower.rotation.x = Math.PI / 2
-    lower.position.z = 0.2
+    lower.position.z = 0.22
     fore.add(lower)
-    const actuator = this.part(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 8), joint)
+    const band = this.part(new THREE.BoxGeometry(0.1, 0.035, 0.08), joint)
+    band.position.set(0, 0.02, 0.16)
+    fore.add(band)
+    const actuator = this.part(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 8), joint)
     actuator.rotation.x = Math.PI / 2
     actuator.position.z = 0.08
     fore.add(actuator)
-    const launcher = this.part(new THREE.CylinderGeometry(0.042, 0.042, 0.07, 10), launchMat)
+    const launcher = this.part(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 10), launchMat)
     launcher.rotation.x = Math.PI / 2
-    launcher.position.z = 0.38
+    launcher.position.z = 0.42
     launcher.name = 'launcher'
     fore.add(launcher)
-    hand.position.z = 0.44
+    hand.position.z = 0.48
     fore.add(hand)
-    const palm = this.part(new THREE.BoxGeometry(0.08, 0.04, 0.09), shell)
-    palm.position.z = 0.04
+    const palm = this.part(new THREE.BoxGeometry(0.11, 0.045, 0.1), shell)
+    palm.position.z = 0.05
     hand.add(palm)
     for (let i = 0; i < 4; i++) {
-      const finger = this.part(new THREE.CapsuleGeometry(0.011, 0.055, 2, 6), shell)
+      const finger = this.part(new THREE.CapsuleGeometry(0.014, 0.07, 2, 6), shell)
       finger.rotation.x = Math.PI / 2
-      finger.position.set((i - 1.5) * 0.018 * Math.sign(side || 1), 0, 0.11)
+      finger.position.set((i - 1.5) * 0.024 * Math.sign(side || 1), 0, 0.13)
       hand.add(finger)
     }
-    const thumb = this.part(new THREE.CapsuleGeometry(0.013, 0.035, 2, 6), shell)
-    thumb.rotation.z = side * 0.8
-    thumb.position.set(side * 0.05, 0, 0.04)
+    const thumb = this.part(new THREE.CapsuleGeometry(0.016, 0.045, 2, 6), shell)
+    thumb.rotation.z = side * 0.9
+    thumb.position.set(side * 0.065, 0, 0.05)
     hand.add(thumb)
   }
 
-  private buildLeg(thigh: THREE.Group, shin: THREE.Group, shell: THREE.Material, joint: THREE.Material): void {
-    const hip = this.part(new THREE.SphereGeometry(0.08, 10, 8), joint)
+  private buildLeg(thigh: THREE.Group, shin: THREE.Group, shell: THREE.Material, joint: THREE.Material, side: number): void {
+    const hip = this.part(new THREE.SphereGeometry(0.095, 10, 8), joint)
     thigh.add(hip)
-    const upper = this.part(new THREE.CapsuleGeometry(0.06, 0.42, 4, 8), shell)
+    const upper = this.part(new THREE.CapsuleGeometry(0.07, 0.5, 4, 8), shell)
     upper.rotation.x = Math.PI / 2
-    upper.position.z = 0.28
+    upper.position.z = 0.32
     thigh.add(upper)
-    const piston = this.part(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 6), joint)
+    const armor = this.part(new THREE.BoxGeometry(0.05, 0.1, 0.26), shell)
+    armor.position.set(side * 0.07, 0, 0.3)
+    thigh.add(armor)
+    const band = this.part(new THREE.BoxGeometry(0.13, 0.04, 0.07), joint)
+    band.position.set(0, 0, 0.22)
+    thigh.add(band)
+    const piston = this.part(new THREE.CylinderGeometry(0.028, 0.028, 0.28, 6), joint)
     piston.rotation.x = Math.PI / 2
-    piston.position.set(0.05, 0, 0.28)
+    piston.position.set(side * 0.06, 0, 0.32)
     thigh.add(piston)
-    const knee = this.part(new THREE.SphereGeometry(0.065, 10, 8), joint)
-    knee.position.z = 0.54
+    const knee = this.part(new THREE.SphereGeometry(0.078, 10, 8), joint)
+    knee.position.z = 0.66
     thigh.add(knee)
-    shin.position.z = 0.54
+    shin.position.z = 0.66
     thigh.add(shin)
-    const lower = this.part(new THREE.CapsuleGeometry(0.048, 0.4, 4, 8), shell)
+    const lower = this.part(new THREE.CapsuleGeometry(0.055, 0.46, 4, 8), shell)
     lower.rotation.x = Math.PI / 2
-    lower.position.z = 0.24
+    lower.position.z = 0.28
     shin.add(lower)
-    const foot = this.part(new THREE.BoxGeometry(0.1, 0.045, 0.22), shell)
-    foot.position.set(0, -0.02, 0.48)
+    const shinBand = this.part(new THREE.BoxGeometry(0.12, 0.035, 0.08), joint)
+    shinBand.position.set(0, 0, 0.2)
+    shin.add(shinBand)
+    const foot = this.part(new THREE.BoxGeometry(0.16, 0.05, 0.3), shell)
+    foot.position.set(0, -0.02, 0.58)
     shin.add(foot)
+    const sole = this.part(new THREE.BoxGeometry(0.17, 0.02, 0.32), joint)
+    sole.position.set(0, -0.05, 0.6)
+    shin.add(sole)
   }
 
   update(dt: number, pose: HeroPose): void {
-    this.root.position.y = 0
     this.root.rotation.y = pose.yaw
     this.torso.rotation.z = pose.bank
     this.torso.rotation.y = 0
@@ -228,12 +255,12 @@ export class Hero {
     this.torso.rotation.x = lean
 
     const stride = pose.mode === 'run' ? Math.sin(pose.phase) : pose.mode === 'idle' ? Math.sin(pose.phase * 0.35) * 0.08 : 0
-    const legBase = pose.mode === 'dive' ? 2.45 : pose.mode === 'swing' ? 1.85 : Math.PI / 2
-    const amp = pose.mode === 'run' ? 0.55 : pose.mode === 'swing' ? 0.25 : pose.mode === 'air' ? 0.2 : 0.04
+    const legBase = pose.mode === 'dive' ? 2.45 : pose.mode === 'swing' ? 1.22 : Math.PI / 2
+    const amp = pose.mode === 'run' ? 0.55 : pose.mode === 'swing' ? 0.18 : pose.mode === 'air' ? 0.2 : 0.04
     this.thighR.rotation.set(legBase + stride * amp, 0, 0)
     this.thighL.rotation.set(legBase - stride * amp, 0, 0)
-    this.shinR.rotation.set(pose.mode === 'run' ? Math.max(0, -stride) * 1.1 : pose.mode === 'swing' ? 0.45 : 0.12, 0, 0)
-    this.shinL.rotation.set(pose.mode === 'run' ? Math.max(0, stride) * 1.1 : pose.mode === 'swing' ? 0.35 : 0.12, 0, 0)
+    this.shinR.rotation.set(pose.mode === 'run' ? Math.max(0, -stride) * 1.1 : pose.mode === 'swing' ? 0.95 : 0.12, 0, 0)
+    this.shinL.rotation.set(pose.mode === 'run' ? Math.max(0, stride) * 1.1 : pose.mode === 'swing' ? 0.95 : 0.12, 0, 0)
 
     const hang = 1.15
     this.armR.rotation.set(hang, 0, 0.12 + stride * 0.15)
@@ -256,6 +283,10 @@ export class Hero {
       const fore = this.activeHand === 'l' ? this.foreL : this.foreR
       arm.lookAt(pose.anchor)
       fore.rotation.set(0.55, 0, 0)
+      const trail = this.activeHand === 'l' ? this.armR : this.armL
+      const trailFore = this.activeHand === 'l' ? this.foreR : this.foreL
+      trail.rotation.set(0.4, 0, this.activeHand === 'l' ? 0.5 : -0.5)
+      trailFore.rotation.set(0.2, 0, 0)
     } else if (pose.whiff > 0) {
       this.armR.rotation.set(0.2, 0, 0.1)
       this.foreR.rotation.set(0.1, 0, 0)

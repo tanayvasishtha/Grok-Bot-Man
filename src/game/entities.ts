@@ -120,20 +120,42 @@ export class Entities {
       roughness: 0.3,
       metalness: 0.2,
     })
-    let placed = 0
-    let guard = 0
-    while (placed < 42 && guard < 600) {
-      guard++
-      const x = CITYRand()
-      const z = CITYRand()
-      const y = 10 + Math.random() * 22
+    const anchors = this.city.anchors
+    const placed: { x: number; y: number; z: number }[] = []
+    const used = new Set<number>()
+    for (let i = 0; i < anchors.length && placed.length < 40; i++) {
+      if (used.has(i)) continue
+      const a = anchors[i]
+      let partner = -1
+      let best = Infinity
+      for (let j = i + 1; j < anchors.length; j++) {
+        if (used.has(j)) continue
+        const b = anchors[j]
+        if (a.buildingId === b.buildingId) continue
+        const horiz = Math.hypot(a.point.x - b.point.x, a.point.z - b.point.z)
+        if (horiz < 26 || horiz > 54) continue
+        if (Math.abs(a.point.y - b.point.y) > 26) continue
+        if (horiz < best) {
+          best = horiz
+          partner = j
+        }
+      }
+      if (partner < 0) continue
+      const b = anchors[partner]
+      const x = (a.point.x + b.point.x) * 0.5
+      const z = (a.point.z + b.point.z) * 0.5
+      const y = Math.min(a.point.y, b.point.y) - Math.min(12, best * 0.2)
+      if (y < 8 || y > 42) continue
+      if (Math.hypot(x, z) < 18) continue
       if (this.city.insideBuilding(x, z, 2)) continue
-      if (Math.hypot(x, z) < 16) continue
+      if (placed.some((p) => Math.hypot(p.x - x, p.y - y, p.z - z) < 14)) continue
       const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(x, y, z)
       this.group.add(mesh)
       this.logits.push({ mesh, base: y, alive: true, wait: 0 })
-      placed++
+      placed.push({ x, y, z })
+      used.add(i)
+      used.add(partner)
     }
   }
 
@@ -176,8 +198,9 @@ export class Entities {
       ring.rotation.z = Math.sin(time + i) * 0.08
       const mat = ring.material as THREE.MeshBasicMaterial
       if (this.captured[i]) mat.color.set('#e7a15a')
-      const d = Math.hypot(body.x - beacon.position.x, body.y - beacon.position.y, body.z - beacon.position.z)
-      if (!this.captured[i] && mission && d < 6.4) {
+      const horiz = Math.hypot(body.x - beacon.position.x, body.z - beacon.position.z)
+      const inBeam = horiz < 5.2 && body.y > 1.5 && body.y < 78
+      if (!this.captured[i] && mission && inBeam) {
         this.captured[i] = true
         events.push({ t: 'beacon', name: beacon.name })
         if (this.captured.every(Boolean)) {
@@ -290,8 +313,4 @@ export class Entities {
     this.group.add(mesh)
     this.orbs.push({ mesh, vel: dir.clone().multiplyScalar(13), life: 4 })
   }
-}
-
-function CITYRand(): number {
-  return -300 + Math.random() * 600
 }

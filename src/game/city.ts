@@ -66,6 +66,33 @@ function windowTexture(kind: 'cool' | 'warm' | 'mix'): THREE.CanvasTexture {
   return tex
 }
 
+type Ward = 'glass' | 'lantern' | 'foundry' | 'antenna' | 'inner'
+
+const WARD_SIGN: Record<Exclude<Ward, 'inner'>, string> = {
+  glass: 'GLASS MILE',
+  lantern: 'LANTERN ROW',
+  foundry: 'FOUNDRY',
+  antenna: 'ANTENNA',
+}
+
+function wardAt(x: number, z: number): Ward {
+  if (z < -80 && Math.abs(x) < Math.abs(z) + 30) return 'glass'
+  if (x < -80 && Math.abs(z) <= Math.abs(x) + 20) return 'lantern'
+  if (x > 90 && z < 150 && z > -40) return 'foundry'
+  if (z > 90) return 'antenna'
+  return 'inner'
+}
+
+const glassFinMat = new THREE.MeshStandardMaterial({
+  color: 0xd5e6f5,
+  metalness: 0.86,
+  roughness: 0.12,
+  emissive: new THREE.Color('#9ecfff'),
+  emissiveIntensity: 0.55,
+})
+const hangBulbMat = new THREE.MeshBasicMaterial({ color: 0xffb15a })
+const dishMat = new THREE.MeshStandardMaterial({ color: 0xc5ced6, metalness: 0.72, roughness: 0.28 })
+
 function signTexture(text: string, color: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 512
@@ -112,12 +139,41 @@ function groundTexture(): THREE.CanvasTexture {
     const p = toPx(c)
     const rw = (road / CITY.size) * size
     const sw = ((road + side * 2) / CITY.size) * size
-    g.fillStyle = '#2a2d33'
-    g.fillRect(0, p - sw / 2, size, sw)
-    g.fillRect(p - sw / 2, 0, sw, size)
-    g.fillStyle = '#101318'
-    g.fillRect(0, p - rw / 2, size, rw)
-    g.fillRect(p - rw / 2, 0, rw, size)
+  g.fillStyle = '#343840'
+  g.fillRect(0, p - sw / 2, size, sw)
+  g.fillRect(p - sw / 2, 0, sw, size)
+  g.fillStyle = '#101318'
+  g.fillRect(0, p - rw / 2, size, rw)
+  g.fillRect(p - rw / 2, 0, rw, size)
+  }
+  g.save()
+  g.globalCompositeOperation = 'source-atop'
+  g.globalAlpha = 0.28
+  g.fillStyle = '#163044'
+  g.fillRect(0, 0, size, size * 0.36)
+  g.fillStyle = '#3a2814'
+  g.fillRect(0, size * 0.22, size * 0.32, size * 0.55)
+  g.fillStyle = '#3a2216'
+  g.fillRect(size * 0.64, size * 0.3, size * 0.36, size * 0.42)
+  g.fillStyle = '#102028'
+  g.fillRect(0, size * 0.64, size, size * 0.36)
+  g.restore()
+  g.strokeStyle = 'rgba(214, 220, 230, 0.42)'
+  g.lineWidth = 2
+  const rw = (road / CITY.size) * size
+  for (let i = 0; i <= CITY.count; i++) {
+    const p = toPx(CITY.origin + i * CITY.cell)
+    const edge = rw / 2
+    g.beginPath()
+    g.moveTo(0, p - edge)
+    g.lineTo(size, p - edge)
+    g.moveTo(0, p + edge)
+    g.lineTo(size, p + edge)
+    g.moveTo(p - edge, 0)
+    g.lineTo(p - edge, size)
+    g.moveTo(p + edge, 0)
+    g.lineTo(p + edge, size)
+    g.stroke()
   }
   g.strokeStyle = 'rgba(230,220,190,0.28)'
   g.lineWidth = 2
@@ -171,6 +227,7 @@ export class City {
   private dummy = new THREE.Object3D()
   private water: THREE.Mesh
   private forward = new THREE.Vector3()
+  private wardLights = new Map<string, THREE.PointLight>()
 
   constructor() {
     const rng = mulberry32(7)
@@ -195,8 +252,8 @@ export class City {
       new THREE.PlaneGeometry(CITY.size, CITY.size),
       new THREE.MeshStandardMaterial({
         map: groundTexture(),
-        roughness: 0.62,
-        metalness: 0.14,
+        roughness: 0.34,
+        metalness: 0.32,
         color: 0xffffff,
       }),
     )
@@ -210,6 +267,10 @@ export class City {
     let spawnScore = Infinity
     let junScore = Infinity
     let extractH = -1
+    let crownX = 0
+    let crownY = 0
+    let crownZ = 0
+    let crownId = -1
     const signs = ['GLASS MILE', 'NIGHT RELAY', 'FOUNDRY', 'LANTERN ROW', 'KEEP THE THREAD', 'ANTENNA', 'LOGIT', 'PLAZA']
     let signI = 0
 
@@ -218,25 +279,26 @@ export class City {
         if (i === 5 && j === 5) continue
         let x = CITY.origin + (i + 0.5) * CITY.cell
         let z = CITY.origin + (j + 0.5) * CITY.cell
-        const north = z < -70
-        const south = z > 90
-        const east = x > 80 && z > -50 && z < 140
-        let h = 12 + rng() * 16
-        if (north) h = 30 + rng() * 52
-        else if (south) h = 16 + rng() * 28
-        else if (east) h = 8 + rng() * 14
-        else if (Math.hypot(x, z) < 130) h = Math.max(h, 18 + rng() * 22)
+        const ward = wardAt(x, z)
+        const north = ward === 'glass'
+        const east = ward === 'foundry'
+        let h = 14 + rng() * 16
+        if (ward === 'glass') h = 34 + rng() * 46
+        else if (ward === 'lantern') h = 8 + rng() * 10
+        else if (ward === 'foundry') h = 7 + rng() * 11
+        else if (ward === 'antenna') h = 14 + rng() * 16
+        else if (Math.hypot(x, z) < 130) h = Math.max(h, 18 + rng() * 20)
         const w = 20 + rng() * 10
         const d = 20 + rng() * 10
-        const setback = rng() > 0.32 && h > 16
+        const setback = (ward === 'glass' ? rng() > 0.12 : ward === 'lantern' ? rng() > 0.78 : rng() > 0.32) && h > 16
         const podiumH = setback ? h * (0.28 + rng() * 0.18) : h
-        const kind = north ? 'cool' : east ? 'warm' : 'mix'
+        const kind = north ? 'cool' : east || ward === 'lantern' ? 'warm' : 'mix'
         const side = new THREE.MeshStandardMaterial({
-          color: kind === 'cool' ? 0x8ea0b4 : kind === 'warm' ? 0xb08972 : 0x9aa3ad,
-          roughness: 0.42,
-          metalness: 0.55,
+          color: kind === 'cool' ? 0x9aafc4 : kind === 'warm' ? 0xb08972 : 0x9aa3ad,
+          roughness: kind === 'cool' ? 0.22 : 0.42,
+          metalness: kind === 'cool' ? 0.78 : 0.55,
           emissive: new THREE.Color(kind === 'warm' ? '#ffc9a0' : '#f0d8c0'),
-          emissiveIntensity: 0.95,
+          emissiveIntensity: ward === 'lantern' ? 1.25 : 0.95,
         })
         const map = windows[kind].clone()
         map.repeat.set(Math.max(2, w / 3.1), Math.max(2, h / 3.3))
@@ -288,9 +350,10 @@ export class City {
           z += oz
         }
 
-        this.addRoofAnchors(id, x, z, roofW, roofD, roofY)
+        this.addRoofAnchors(id, x, z, roofW, roofD, roofY, ward === 'antenna')
+        this.dressRoof(ward, id, x, z, roofW, roofD, roofY, h, rng, box, darkMat)
 
-        if (h > 42 && rng() > 0.4) {
+        if (h > 42 && rng() > 0.4 && ward !== 'antenna' && ward !== 'foundry') {
           const armLen = 7 + rng() * 5
           const arm = new THREE.Mesh(box, darkMat)
           arm.scale.set(armLen, 0.28, 0.28)
@@ -302,25 +365,19 @@ export class City {
           })
         }
 
-        if (rng() > 0.55) {
+        if (rng() > 0.35) {
           const ac = new THREE.Mesh(box, darkMat)
           ac.scale.set(1.6 + rng(), 0.7, 1.2 + rng())
-          ac.position.set(x + (rng() - 0.5) * roofW * 0.3, roofY + 0.35, z + (rng() - 0.5) * roofD * 0.3)
+          ac.position.set(x + roofW * 0.28, roofY + 0.4, z + roofD * 0.22)
           this.group.add(ac)
         }
 
-        if (south && rng() > 0.45) {
-          const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 6, 6), darkMat)
-          mast.position.set(x, roofY + 3, z)
-          this.group.add(mast)
-          this.anchors.push({
-            point: new THREE.Vector3(x, roofY + 6.4, z),
-            buildingId: id,
-          })
-        }
-
-        if (signI < signs.length && h > 18 && rng() > 0.72) {
-          const tex = signTexture(signs[signI], north ? '#d7ecff' : '#ffc48a')
+        const signChance = ward === 'lantern' ? 0.58 : ward === 'glass' ? 0.84 : 0.74
+        const label = ward === 'inner' ? (signI < signs.length ? signs[signI] : '') : WARD_SIGN[ward]
+        if (label && h > 12 && rng() > signChance) {
+          if (ward === 'inner') signI++
+          const ink = ward === 'glass' || ward === 'antenna' ? '#d7ecff' : '#ffc48a'
+          const tex = signTexture(label, ink)
           const sign = new THREE.Mesh(
             new THREE.PlaneGeometry(8, 2),
             new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
@@ -329,7 +386,6 @@ export class City {
           sign.position.set(x, Math.min(h * 0.62, roofY - 2), z + face * (roofD / 2 + 0.08))
           if (face < 0) sign.rotation.y = Math.PI
           this.group.add(sign)
-          signI++
         }
 
         const block: Block = { id, x, z, w: roofW, d: roofD, h: roofY, boxes }
@@ -345,18 +401,32 @@ export class City {
           junScore = junD
           this.jun.set(x, roofY, z)
         }
+        if (roofY > 14) {
+          const lip = new THREE.Mesh(box, darkMat)
+          lip.scale.set(roofW + 0.5, 0.4, 0.28)
+          lip.position.set(x, roofY + 0.2, z - roofD / 2 - 0.1)
+          this.group.add(lip)
+        }
+
         if (z < -150 && roofY > extractH) {
           extractH = roofY
+          crownX = x
+          crownY = roofY
+          crownZ = z
+          crownId = id
           this.extract.set(x, roofY + 2.2, z)
         }
         id++
       }
     }
 
+    if (crownId >= 0) this.raiseCrown(crownX, crownY, crownZ, crownId)
     if (this.jun.lengthSq() === 0) this.jun.copy(this.spawn).add(new THREE.Vector3(-20, 0, 10))
     this.placePeople(rng)
+    this.dressSpots(darkMat)
     this.addPlaza(darkMat)
     this.beacons = this.makeBeacons()
+    this.addWardLights()
     this.addLamps()
     const traffic = this.addCars(rng)
     this.carMesh = traffic.body
@@ -406,7 +476,7 @@ export class City {
     ]
   }
 
-  private addRoofAnchors(id: number, x: number, z: number, w: number, d: number, y: number): void {
+  private addRoofAnchors(id: number, x: number, z: number, w: number, d: number, y: number, sparse: boolean): void {
     const o = 0.9
     const hy = y + 1.5
     const pts = [
@@ -414,14 +484,147 @@ export class City {
       [x + w / 2 + o, hy, z - d / 2 - o],
       [x - w / 2 - o, hy, z + d / 2 + o],
       [x + w / 2 + o, hy, z + d / 2 + o],
-      [x, hy, z - d / 2 - o],
-      [x, hy, z + d / 2 + o],
-      [x - w / 2 - o, hy, z],
-      [x + w / 2 + o, hy, z],
     ]
+    if (!sparse) {
+      pts.push(
+        [x, hy, z - d / 2 - o],
+        [x, hy, z + d / 2 + o],
+        [x - w / 2 - o, hy, z],
+        [x + w / 2 + o, hy, z],
+      )
+    }
     for (const p of pts) {
       this.anchors.push({ point: new THREE.Vector3(p[0], p[1], p[2]), buildingId: id })
     }
+  }
+
+  private dressRoof(
+    ward: Ward,
+    id: number,
+    x: number,
+    z: number,
+    w: number,
+    d: number,
+    y: number,
+    h: number,
+    rng: () => number,
+    box: THREE.BoxGeometry,
+    dark: THREE.Material,
+  ): void {
+    if (ward === 'glass') {
+      const finH = 5 + rng() * 7
+      const fin = new THREE.Mesh(box, glassFinMat)
+      fin.scale.set(0.16, finH, Math.max(4, d * 0.55))
+      fin.position.set(x, y + finH / 2, z)
+      this.group.add(fin)
+      return
+    }
+    if (ward === 'lantern') {
+      const hy = Math.min(7.2, Math.max(4.5, h * 0.45))
+      for (const side of [-1, 1]) {
+        const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 4), dark)
+        cord.position.set(x + side * (w / 2 - 0.3), hy + 0.55, z + d / 2 + 0.15)
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), hangBulbMat)
+        bulb.position.set(x + side * (w / 2 - 0.3), hy, z + d / 2 + 0.15)
+        this.group.add(cord, bulb)
+      }
+      return
+    }
+    if (ward === 'foundry') {
+      const stackH = 9 + rng() * 7
+      const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, stackH, 8), dark)
+      stack.position.set(x - w * 0.16, y + stackH / 2, z - d * 0.1)
+      const stack2 = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.45, stackH * 0.62, 8), dark)
+      stack2.position.set(x + w * 0.18, y + stackH * 0.31, z + d * 0.12)
+      this.group.add(stack, stack2)
+      this.anchors.push({ point: new THREE.Vector3(x - w * 0.16, y + stackH + 0.6, z - d * 0.1), buildingId: id })
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, Math.max(6, w * 0.7), 6), dark)
+      pipe.rotation.z = Math.PI / 2
+      pipe.position.set(x, y + 0.45, z + d / 2 - 0.4)
+      this.group.add(pipe)
+      return
+    }
+    if (ward === 'antenna') {
+      const mastH = 11 + rng() * 7
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.14, mastH, 6), dark)
+      mast.position.set(x, y + mastH / 2, z)
+      const dish = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.08, 12), dishMat)
+      dish.rotation.x = 1.05
+      dish.position.set(x + 0.2, y + mastH * 0.62, z)
+      const sideA = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, mastH * 0.55, 5), dark)
+      sideA.position.set(x - w * 0.28, y + mastH * 0.27, z + d * 0.2)
+      const sideB = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, mastH * 0.4, 5), dark)
+      sideB.position.set(x + w * 0.22, y + mastH * 0.2, z - d * 0.18)
+      this.group.add(mast, dish, sideA, sideB)
+      this.anchors.push({ point: new THREE.Vector3(x, y + mastH + 0.4, z), buildingId: id })
+    }
+  }
+
+  private raiseCrown(x: number, y: number, z: number, id: number): void {
+    const steps = [7.2, 4.6, 2.4]
+    let hy = y
+    for (const span of steps) {
+      const h = 2.4
+      const step = new THREE.Mesh(new THREE.BoxGeometry(span, h, span), glassFinMat)
+      step.position.set(x, hy + h / 2, z)
+      this.group.add(step)
+      hy += h
+    }
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 7, 6), glassFinMat)
+    spire.position.set(x, hy + 3.5, z)
+    this.group.add(spire)
+    this.anchors.push({ point: new THREE.Vector3(x, hy + 7.2, z), buildingId: id })
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.2, 3.4, 0.18, 20),
+      new THREE.MeshStandardMaterial({ color: 0xe7a15a, emissive: new THREE.Color('#e7a15a'), emissiveIntensity: 0.35, roughness: 0.4, metalness: 0.4 }),
+    )
+    pad.position.set(x + 8, y + 0.2, z)
+    this.group.add(pad)
+    this.extract.set(x + 8, y + 0.45, z)
+  }
+
+  private dressSpots(dark: THREE.Material): void {
+    const stall = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.75, 0.7), dark)
+    stall.position.set(this.ivo.x + 1.35, 0.38, this.ivo.z)
+    const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 5), dark)
+    hook.position.set(this.ivo.x + 1.35, 1.5, this.ivo.z + 0.2)
+    const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), hangBulbMat)
+    lantern.position.set(this.ivo.x + 1.35, 2.15, this.ivo.z + 0.2)
+    this.group.add(stall, hook, lantern)
+    const canopy = new THREE.MeshStandardMaterial({
+      color: 0x4a3020,
+      emissive: new THREE.Color('#ff9a4a'),
+      emissiveIntensity: 0.4,
+      roughness: 0.55,
+    })
+    for (let i = 0; i < 5; i++) {
+      const px = this.ivo.x - 1.4 + i * 1.7
+      const pz = this.ivo.z - 2.4
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 3.2, 5), dark)
+      post.position.set(px, 1.6, pz)
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), hangBulbMat)
+      bulb.position.set(px, 3.35, pz)
+      this.group.add(post, bulb)
+    }
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.12, 1.5), canopy)
+    awning.position.set(this.ivo.x + 2, 3.4, this.ivo.z - 2.4)
+    this.group.add(awning)
+
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x6a4332, roughness: 0.82, metalness: 0.08 })
+    const spots = [
+      [1.3, 0.35, 0],
+      [1.3, 1.05, 0],
+      [2.05, 0.35, 0.15],
+    ]
+    for (const [dx, dy, dz] of spots) {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.68, 0.68), crateMat)
+      crate.position.set(this.mara.x + dx, dy, this.mara.z + dz)
+      this.group.add(crate)
+    }
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.8, 6), dark)
+    pipe.rotation.z = Math.PI / 2
+    pipe.position.set(this.mara.x + 1.6, 0.5, this.mara.z + 0.9)
+    this.group.add(pipe)
   }
 
   private addLedgeAnchors(id: number, x: number, z: number, w: number, d: number, y: number): void {
@@ -503,6 +706,17 @@ export class City {
       bench.rotation.y = -a
       bench.castShadow = true
       this.group.add(bench)
+    }
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffe1b0 })
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2
+      const px = Math.cos(a) * 22
+      const pz = Math.sin(a) * 22
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.4, 6), dark)
+      pole.position.set(px, 2.2, pz)
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), bulbMat)
+      bulb.position.set(px, 4.5, pz)
+      this.group.add(pole, bulb)
     }
   }
 
@@ -639,6 +853,23 @@ export class City {
         vel.x += (dx / len) * 6
         vel.z += (dz / len) * 6
       }
+    }
+  }
+
+  ignite(name: string): void {
+    const light = this.wardLights.get(name)
+    if (!light) return
+    light.intensity = 26
+    light.distance = 96
+  }
+
+  private addWardLights(): void {
+    for (const beacon of this.beacons) {
+      const warm = beacon.name === 'Foundry' || beacon.name === 'Lantern Row'
+      const light = new THREE.PointLight(warm ? 0xffb15a : 0x9ecfff, 0, 40, 2)
+      light.position.set(beacon.position.x, beacon.position.y + 10, beacon.position.z)
+      this.group.add(light)
+      this.wardLights.set(beacon.name, light)
     }
   }
 

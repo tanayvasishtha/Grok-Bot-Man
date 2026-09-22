@@ -58,6 +58,22 @@ export class Player {
     return this.vel.length()
   }
 
+  get slingWindow(): boolean {
+    if (!this.swinging || this.speed < 11) return false
+    if (this.chest().y > this.anchor.y - 1.5) return false
+    if (this.vel.y < 0 && this.vel.y > -9) return true
+    return this.sinceBottom < 0.28
+  }
+
+  settle(): void {
+    this.vel.set(0, 0, 0)
+    this.swinging = false
+    this.zipping = false
+    this.diving = false
+    this.grounded = true
+    this.anchorId = -1
+  }
+
   reset(spawn: THREE.Vector3): void {
     this.pos.copy(spawn)
     this.vel.set(0, 0, 0)
@@ -125,7 +141,7 @@ export class Player {
     else this.sinceBottom += dt
     this.prevVy = this.vel.y
 
-    if (!input.swingHeld && this.swinging && !this.zipping) {
+    if (!input.swingHeld && this.swinging && !this.zipping && !input.swingDown) {
       if (this.release(true, audio)) flags.slung = true
     }
 
@@ -170,26 +186,33 @@ export class Player {
     this.zipping = false
     this.diving = false
     const flat = Math.hypot(lookSafe.x, lookSafe.z) || 1
-    this.pos.x += (lookSafe.x / flat) * 1.6
-    this.pos.z += (lookSafe.z / flat) * 1.6
-    this.pos.y += 1.35
+    this.pos.x += (lookSafe.x / flat) * 0.4
+    this.pos.z += (lookSafe.z / flat) * 0.4
+    this.pos.y += 0.3
     const hung = this.chest().distanceTo(this.anchor)
-    this.rope = clamp(hung * 0.8, ROPE_MIN, ROPE_MAX)
-    this.vel.x += (lookSafe.x / flat) * 12
-    this.vel.z += (lookSafe.z / flat) * 12
-    this.vel.y = Math.max(this.vel.y, 8)
+    this.rope = clamp(hung, ROPE_MIN, ROPE_MAX)
+    const hs = Math.hypot(this.vel.x, this.vel.z)
+    if (hs < 4.5) {
+      const add = 4.5 - hs
+      this.vel.x += (lookSafe.x / flat) * add
+      this.vel.z += (lookSafe.z / flat) * add
+    }
     this.grounded = false
-    this.jumpLock = 0.35
-    this.catch = 0.28
-    this.airGrace = 0.85
+    this.jumpLock = 0.28
+    this.catch = 0.16
+    this.airGrace = 0.7
   }
 
   private release(score: boolean, audio: AudioBus | null): boolean {
     if (!this.swinging) return false
-    const perfect = score && this.sinceBottom < 0.16 && this.speed > 16 && this.chest().y < this.anchor.y - 2
+    const perfect = score && this.slingWindow
     if (perfect) {
-      this.vel.x *= 1.14
-      this.vel.z *= 1.14
+      const fromFall = this.vel.y < 0 ? clamp(1 + this.vel.y / 9, 0, 1) : 0
+      const fromRise = 1 - clamp(this.sinceBottom / 0.28, 0, 1)
+      const closeness = Math.max(fromFall, this.vel.y >= 0 ? fromRise : fromFall)
+      const boost = 1.16 + closeness * 0.2
+      this.vel.multiplyScalar(boost)
+      this.vel.y = Math.max(this.vel.y, 1.5 + closeness * 2.5)
     }
     this.swinging = false
     this.zipping = false
@@ -222,34 +245,30 @@ export class Player {
       let dist = offset.length()
       const n = dist > 0.001 ? offset.multiplyScalar(1 / dist) : offset.set(0, -1, 0)
       let reel = 0
-      if (input.moveY > 0.2) reel += 22
-      if (input.moveY < -0.2) reel -= 16
+      if (this.catch <= 0) {
+        if (input.moveY > 0.2) reel += 22
+        if (input.moveY < -0.2) reel -= 16
+      }
       if (wheel > 0) reel -= 18
       if (wheel < 0) reel += 18
       if (this.zipping) reel += 48
       if (this.catch > 0 && dist + 0.2 < this.rope) reel += 24
       this.rope = clamp(this.rope - reel * dt, ROPE_MIN, ROPE_MAX)
       const radial = this.vel.dot(n)
-      if (radial > 0) this.vel.addScaledVector(n, -radial)
-      // A loose line only cinches when you are not diving straight at the anchor.
-      if (dist + 1.2 < this.rope && radial > -6) this.rope = Math.max(ROPE_MIN, dist + 0.2)
-      const tangent = this.assist.set(fwdX, 0, fwdZ)
-      tangent.addScaledVector(n, -tangent.dot(n))
-      if (tangent.lengthSq() > 1e-4 && this.speed < 46) {
-        tangent.normalize()
-        this.vel.addScaledVector(tangent, 26 * dt)
-      }
+      if (radial > 0 && dist >= this.rope - 0.2) this.vel.addScaledVector(n, -radial)
       const side = this.tmp2.set(rightX, 0, rightZ).projectOnPlane(n)
       if (side.lengthSq() > 1e-6) {
         side.normalize()
-        this.vel.addScaledVector(side, input.moveX * 24 * dt)
+        this.vel.addScaledVector(side, input.moveX * 18 * dt)
       }
       if (this.zipping && this.rope <= ROPE_MIN + 0.15) {
-        const kick = this.tmp2.copy(this.anchor).sub(this.chest())
-        kick.y = Math.max(0, kick.y)
-        if (kick.lengthSq() > 0.01) kick.normalize()
-        this.vel.addScaledVector(kick, 12)
-        this.vel.y = Math.max(this.vel.y, 5)
+        const travel = this.assist.set(this.vel.x, 0, this.vel.z)
+        if (travel.lengthSq() < 4) travel.set(fwdX, 0, fwdZ)
+        if (travel.lengthSq() > 0.01) {
+          travel.normalize()
+          this.vel.addScaledVector(travel, 14)
+        }
+        this.vel.y = Math.max(this.vel.y, 6)
         this.release(false, null)
       }
     } else {
@@ -376,9 +395,10 @@ export class Player {
         } else {
           const into = this.vel.dot(normal)
           if (into < 0) this.vel.addScaledVector(normal, -into)
-          if (Math.hypot(this.vel.x, this.vel.z) > 9 && this.wallLock <= 0 && !this.grounded) {
-            this.vel.addScaledVector(normal, 9)
-            this.vel.y = Math.max(this.vel.y, 7.5)
+          const horiz = Math.hypot(this.vel.x, this.vel.z)
+          if (horiz > 9 && this.wallLock <= 0 && !this.grounded) {
+            this.vel.addScaledVector(normal, 8)
+            this.vel.y = Math.max(this.vel.y, Math.min(14, 6 + horiz * 0.12))
             this.wallLock = 0.4
             if (this.swinging) this.release(false, null)
             audio.wall()
@@ -455,8 +475,8 @@ export class Player {
       .set((lookDir.x / flat) * 0.92, Math.max(lookDir.y, -0.05) + 0.28, (lookDir.z / flat) * 0.92)
       .normalize()
     const chest = this.chest()
-    this.collectAnchors(aim, chest, city, 6)
-    if (this.top.length === 0) this.collectAnchors(aim, chest, city, 1)
+    this.collectAnchors(aim, chest, city, 3)
+    if (this.top.length === 0) this.collectAnchors(aim, chest, city, -14)
     for (const item of this.top) {
       if (!this.blocked(chest, item.a, city)) return item.a
     }
@@ -466,19 +486,20 @@ export class Player {
   private collectAnchors(aim: THREE.Vector3, chest: THREE.Vector3, city: City, minHeight: number): void {
     this.top.length = 0
     for (const a of city.anchors) {
-      if (this.swinging && a.point.distanceTo(this.anchor) < 8) continue
+      if (this.swinging && a.point.distanceTo(this.anchor) < 6) continue
       const to = this.tmp2.copy(a.point).sub(chest)
       const dist = to.length()
       const horiz = Math.hypot(a.point.x - chest.x, a.point.z - chest.z)
-      if (dist < 18 || dist > 74 || horiz < 22) continue
+      const minDist = this.swinging ? 9 : 12
+      if (dist < minDist || dist > 80 || horiz < 8) continue
       to.multiplyScalar(1 / dist)
       const align = to.dot(aim)
-      if (align < 0.34) continue
+      if (align < 0.3) continue
       const height = a.point.y - chest.y
-      if (height < minHeight || height > 55) continue
-      const arc = 1 - Math.abs(horiz - 36) / 30
-      const distScore = 1 - Math.abs(dist - 44) / 34
-      const score = align * 2.2 + arc * 2.4 + distScore + Math.min(height, 34) / 14
+      if (height < minHeight || height > 62) continue
+      const arc = 1 - Math.abs(horiz - 34) / 36
+      const distScore = 1 - Math.abs(dist - 40) / 40
+      const score = align * 3.6 + arc * 1.1 + distScore + Math.min(Math.max(height, 0), 36) / 20
       this.pushTop(a, score)
     }
   }

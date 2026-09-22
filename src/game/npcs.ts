@@ -30,16 +30,19 @@ const LAST = ['Adeyemi', 'Berg', 'Cho', 'Dutta', 'Elsayed', 'Ferreira', 'Ghosh',
 
 const COATS = [0xc4553a, 0x3e6d8c, 0xd8c7a1, 0x2f6b52, 0x8a4e78, 0x4d5560, 0xc9843a, 0x1f3d4d]
 
-function person(color: number, named: boolean): { group: THREE.Group; head: THREE.Object3D; legL: THREE.Object3D; legR: THREE.Object3D } {
+type Silhouette = 'crowd' | 'nia' | 'jun' | 'ivo' | 'mara'
+
+function person(color: number, ring: boolean, kind: Silhouette = 'crowd'): { group: THREE.Group; head: THREE.Object3D; legL: THREE.Object3D; legR: THREE.Object3D } {
   const group = new THREE.Group()
   const coat = new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.05 })
   const skin = new THREE.MeshStandardMaterial({ color: 0xd7b093, roughness: 0.6 })
   const dark = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.5 })
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.55, 4, 8), coat)
-  body.position.y = 1.05
+  const tall = kind === 'nia' ? 0.7 : kind === 'mara' ? 0.42 : 0.55
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(kind === 'ivo' ? 0.24 : 0.2, tall, 4, 8), coat)
+  body.position.y = 0.78 + tall * 0.5
   body.castShadow = true
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), skin)
-  head.position.y = 1.62
+  head.position.y = body.position.y + tall * 0.5 + 0.28
   head.castShadow = true
   const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.38, 3, 6), dark)
   const legR = legL.clone()
@@ -48,14 +51,51 @@ function person(color: number, named: boolean): { group: THREE.Group; head: THRE
   legL.castShadow = true
   legR.castShadow = true
   group.add(body, head, legL, legR)
-  if (named) {
-    const ring = new THREE.Mesh(
+  if (kind === 'nia') {
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.22), dark)
+    collar.position.y = body.position.y + 0.28
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 6, 12), dark)
+    band.position.y = head.position.y
+    band.rotation.x = Math.PI / 2
+    const board = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.03), new THREE.MeshStandardMaterial({ color: 0xe7d7c2, roughness: 0.6 }))
+    board.position.set(0.28, 1.05, 0.12)
+    group.add(collar, band, board)
+  } else if (kind === 'jun') {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.06, 10), dark)
+    cap.position.y = head.position.y + 0.14
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 10), dark)
+    brim.position.y = head.position.y + 0.1
+    const satchel = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.08), dark)
+    satchel.position.set(-0.22, 1.15, -0.12)
+    group.add(cap, brim, satchel)
+  } else if (kind === 'ivo') {
+    const lantern = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffb15a }),
+    )
+    lantern.position.set(0.32, 1.05, 0.08)
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.28, 5), dark)
+    handle.position.set(0.32, 1.22, 0.08)
+    group.add(lantern, handle)
+  } else if (kind === 'mara') {
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.04), dark)
+    visor.position.set(0, head.position.y + 0.02, 0.12)
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.24), dark)
+    belt.position.y = 0.95
+    const wrench = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.36, 5), new THREE.MeshStandardMaterial({ color: 0xc5ccd4, metalness: 0.8, roughness: 0.3 }))
+    wrench.rotation.z = 0.4
+    wrench.position.set(0.28, 0.9, 0.1)
+    group.add(visor, belt, wrench)
+    group.scale.setScalar(0.92)
+  }
+  if (ring) {
+    const mark = new THREE.Mesh(
       new THREE.TorusGeometry(0.42, 0.025, 8, 20),
       new THREE.MeshBasicMaterial({ color: 0xe7a15a, transparent: true, opacity: 0.85 }),
     )
-    ring.rotation.x = Math.PI / 2
-    ring.position.y = 0.05
-    group.add(ring)
+    mark.rotation.x = Math.PI / 2
+    mark.position.y = 0.05
+    group.add(mark)
   }
   return { group, head, legL, legR }
 }
@@ -65,10 +105,10 @@ export class Crowd {
   readonly barks: Bark[] = []
 
   constructor(city: City) {
-    this.addNamed('nia', 'Nia Voss', city.nia, 0xd8c7a1, 0)
-    this.addNamed('jun', 'Jun Park', city.jun, 0x3e6d8c, 1)
-    this.addNamed('ivo', 'Ivo Pell', city.ivo, 0xc9843a, 2)
-    this.addNamed('mara', 'Mara Ell', city.mara, 0xc4553a, 3)
+    this.addNamed('nia', 'Nia Voss', city.nia, 0xd8c7a1, 0, 'nia')
+    this.addNamed('jun', 'Jun Park', city.jun, 0x3e6d8c, 1, 'jun')
+    this.addNamed('ivo', 'Ivo Pell', city.ivo, 0xc9843a, 2, 'ivo')
+    this.addNamed('mara', 'Mara Ell', city.mara, 0xc4553a, 3, 'mara')
     this.addPair('lale', 'Lale', 'Rafi', new THREE.Vector3(-14, 0, 22), 4)
     this.addPair('nori', 'Nori', 'Pavel', new THREE.Vector3(18, 0, -16), 6)
 
@@ -84,7 +124,7 @@ export class Crowd {
         ? [new THREE.Vector3(base + side, 0, along0), new THREE.Vector3(base + side, 0, along1)]
         : [new THREE.Vector3(along0, 0, base + side), new THREE.Vector3(along1, 0, base + side)]
       if (city.insideBuilding(path[0].x, path[0].z, 0.8)) continue
-      const built = person(COATS[n % COATS.length], false)
+      const built = person(COATS[n % COATS.length], false, 'crowd')
       const npc: Npc = {
         id: `c${n}`,
         name: `${FIRST[n % FIRST.length]} ${LAST[(n * 3) % LAST.length]}`,
@@ -108,8 +148,8 @@ export class Crowd {
     }
   }
 
-  private addNamed(id: string, name: string, pos: THREE.Vector3, color: number, index: number): void {
-    const built = person(color, true)
+  private addNamed(id: string, name: string, pos: THREE.Vector3, color: number, index: number, kind: Silhouette = 'crowd'): void {
+    const built = person(color, true, kind)
     const npc: Npc = {
       id,
       name,

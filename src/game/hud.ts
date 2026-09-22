@@ -14,6 +14,7 @@ export type HudView = {
   prompt: string
   hint: string
   sling: string
+  slingWindow: boolean
   anchorHot: boolean
   debug: string
   barks: { x: number; y: number; text: string }[]
@@ -96,6 +97,7 @@ export class Hud {
     hint.classList.toggle('hidden', !view.hint)
     const reticle = document.getElementById('reticle')!
     reticle.classList.toggle('hot', view.anchorHot)
+    reticle.classList.toggle('window', view.slingWindow)
     reticle.classList.toggle('hidden', view.mode !== 'play')
     const sling = document.getElementById('sling')!
     sling.textContent = view.sling

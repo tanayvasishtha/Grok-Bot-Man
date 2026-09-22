@@ -144,6 +144,11 @@ dd { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
   border: 1px solid rgba(239, 234, 226, 0.45); border-radius: 50%;
 }
 #reticle.hot { border-color: var(--ice); box-shadow: 0 0 12px rgba(183, 230, 234, 0.45); }
+#reticle.window {
+  border-color: var(--amber);
+  box-shadow: 0 0 16px rgba(231, 161, 90, 0.85);
+  transform: translate(-50%, -50%) scale(1.28);
+}
 #sling {
   position: absolute; left: 50%; top: 42%;
   transform: translate(-50%, 8px);

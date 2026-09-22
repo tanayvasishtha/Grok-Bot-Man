@@ -22,6 +22,7 @@ export class CameraRig {
     solids: THREE.Object3D[],
     menu: boolean,
     reduceMotion: boolean,
+    swinging = false,
   ): void {
     if (menu) {
       this.orbit += dt * (reduceMotion ? 0.02 : 0.07)
@@ -51,18 +52,23 @@ export class CameraRig {
     }
 
     const speed = velocity.length()
-    if (input && Math.abs(input.lookX) + Math.abs(input.lookY) < 0.5 && speed > 10 && !input.rightHeld) {
-      const face = Math.atan2(velocity.x, velocity.z)
-      this.yaw = dampAngle(this.yaw, face, 1.6, dt)
+    if (input && swinging) {
+      const steering = input.turnLeft || input.turnRight || input.turnUp || input.turnDown
+      const idleLook = Math.abs(input.lookX) + Math.abs(input.lookY) < 0.5 && !input.rightHeld && !steering
+      if (idleLook && speed > 8) {
+        const face = Math.atan2(velocity.x, velocity.z)
+        this.yaw = dampAngle(this.yaw, face, 2.1, dt)
+        this.pitch = damp(this.pitch, -0.2, 2.4, dt)
+      }
     }
 
     const cp = Math.cos(this.pitch)
     const sp = Math.sin(this.pitch)
     this.lookDir.set(Math.sin(this.yaw) * cp, sp, Math.cos(this.yaw) * cp).normalize()
     this.target.copy(focus)
-    this.target.y += 1.55
-    this.target.addScaledVector(velocity, 0.045)
-    let dist = this.dist
+    this.target.y += swinging ? 1.2 : 1.55
+    this.target.addScaledVector(velocity, swinging ? 0.07 : 0.03)
+    let dist = swinging ? 6.9 : this.dist
     this.desired.copy(this.target).addScaledVector(this.lookDir, -dist)
     this.ray.set(this.target, this.desired.clone().sub(this.target).normalize())
     this.ray.far = dist
@@ -80,7 +86,7 @@ export class CameraRig {
   apply(camera: THREE.PerspectiveCamera, speed: number): void {
     camera.position.copy(this.smooth)
     camera.lookAt(this.target)
-    const fov = damp(camera.fov, 68 + clamp(speed / 70, 0, 1) * 14, 4, 0.016)
+    const fov = damp(camera.fov, 66 + clamp(speed / 58, 0, 1) * 16, 4, 0.016)
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = fov
       camera.updateProjectionMatrix()

@@ -63,6 +63,7 @@ export class Game {
   private slingText = ''
   private slingLife = 0
   private hintLife = 18
+  private landing = 0
   private district = 'Central Plaza'
   private districtHold = ''
   private districtTime = 0
@@ -70,11 +71,14 @@ export class Game {
   private win = false
   private logitStep = 0
   private last = performance.now()
-  private cable: THREE.Mesh
-  private cableGlow: THREE.Mesh
+  private cableSegs: THREE.Mesh[] = []
+  private glowSegs: THREE.Mesh[] = []
   private marker: THREE.Mesh
-  private up = new THREE.Vector3(0, 1, 0)
+  private cableMid = new THREE.Vector3()
+  private segA = new THREE.Vector3()
+  private segB = new THREE.Vector3()
   private dir = new THREE.Vector3()
+  private up = new THREE.Vector3(0, 1, 0)
   private proj = new THREE.Vector3()
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -98,16 +102,25 @@ export class Game {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
-    this.cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 8), core)
-    this.cableGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1, 8), glow)
-    this.cable.visible = false
-    this.cableGlow.visible = false
+    const coreGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 6)
+    const glowGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 6)
+    for (let i = 0; i < 8; i++) {
+      const seg = new THREE.Mesh(coreGeo, core)
+      const haze = new THREE.Mesh(glowGeo, glow)
+      seg.frustumCulled = false
+      haze.frustumCulled = false
+      seg.visible = false
+      haze.visible = false
+      this.cableSegs.push(seg)
+      this.glowSegs.push(haze)
+      this.stage.scene.add(seg, haze)
+    }
     this.marker = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.45, 0),
       new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.9 }),
     )
     this.marker.visible = false
-    this.stage.scene.add(this.cable, this.cableGlow, this.marker)
+    this.stage.scene.add(this.marker)
 
     this.checkpoint = this.snap()
     this.cameraRig.yaw = this.player.yaw
@@ -222,7 +235,7 @@ export class Game {
       else if (this.mode === 'pause') this.resume()
     }
 
-    const simulate = this.mode === 'play' && !this.talk
+    const simulate = this.mode === 'play' && !this.talk && this.landing <= 0
     const alive = this.mode === 'play' || this.mode === 'menu' || this.mode === 'dialogue'
     this.cameraRig.update(
       dt,
@@ -232,16 +245,25 @@ export class Game {
       this.city.solids,
       this.mode === 'menu',
       this.reduceMotion,
+      this.player.swinging,
     )
     if (simulate) this.stepPlay(dt, input, usedTalk)
-    else if (alive) {
+    else if (this.landing > 0) {
+      this.landing -= dt
+      this.city.update(dt)
+      this.player.pose(this.hero, this.cameraRig.yaw)
+      if (this.landing <= 0) {
+        this.mode = 'end'
+        document.exitPointerLock()
+      }
+    } else if (alive) {
       this.city.update(dt)
       this.crowd.update(dt, { x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, speed: 0, grounded: true }, this.talk?.npc.id ?? null)
       this.player.pose(this.hero, this.cameraRig.yaw)
     }
     this.stage.camera.fov = this.mode === 'menu' ? 58 : this.stage.camera.fov
     if (simulate) {
-      this.cameraRig.update(dt, null, this.player.pos, this.player.vel, this.city.solids, false, this.reduceMotion)
+      this.cameraRig.update(dt, null, this.player.pos, this.player.vel, this.city.solids, false, this.reduceMotion, this.player.swinging)
     }
     this.cameraRig.apply(this.stage.camera, simulate ? this.player.speed : 0)
     this.stage.follow(this.player.pos.x, this.player.pos.y, this.player.pos.z)
@@ -296,6 +318,7 @@ export class Game {
         this.stats.beacons++
         this.score += 900
         this.audio.beacon()
+        this.city.ignite(event.name)
         this.hud.toast(`${event.name} is live`)
         this.checkpoint = this.snap()
         this.checkpoint.pos.copy(this.player.pos)
@@ -343,9 +366,9 @@ export class Game {
   private winRun(): void {
     if (this.win) return
     this.win = true
-    this.mode = 'end'
+    this.landing = 0.85
+    this.player.settle()
     this.audio.win()
-    document.exitPointerLock()
     const bonus = Math.floor(Math.max(0, 420 - this.stats.seconds) * 8)
     this.score += bonus
     this.storeBest(true)
@@ -426,13 +449,20 @@ export class Game {
 
   private poseCable(): void {
     const show = this.player.swinging
-    this.cable.visible = show
-    this.cableGlow.visible = show
     if (show) {
-      this.stretch(this.cable, this.hero.handWorld, this.player.anchor)
-      this.stretch(this.cableGlow, this.hero.handWorld, this.player.anchor)
+      const hand = this.hero.handWorld
+      const anchor = this.player.anchor
+      const dist = Math.max(0.2, hand.distanceTo(anchor))
+      const slack = Math.max(0, this.player.rope - dist)
+      const tame = 1 - Math.min(1, this.player.speed / 28)
+      const sag = Math.min(6.5, Math.max(0.12, 0.2 + tame * 2.4 + slack * 0.5))
+      this.layCable(this.cableSegs, hand, anchor, sag)
+      this.layCable(this.glowSegs, hand, anchor, sag)
+    } else {
+      for (const seg of this.cableSegs) seg.visible = false
+      for (const seg of this.glowSegs) seg.visible = false
     }
-    const preview = Boolean(this.player.preview) && this.mode === 'play' && !this.player.swinging
+    const preview = Boolean(this.player.preview) && this.mode === 'play'
     this.marker.visible = Boolean(preview)
     if (preview && this.player.preview) {
       this.marker.position.copy(this.player.preview.point)
@@ -440,14 +470,31 @@ export class Game {
     }
   }
 
-  private stretch(mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3): void {
-    this.dir.copy(b).sub(a)
-    const straight = Math.max(0.2, this.dir.length())
-    mesh.position.copy(a).lerp(b, 0.5)
-    mesh.scale.set(1, straight, 1)
-    const n = this.dir.multiplyScalar(1 / straight)
-    if (n.y < -0.999) mesh.quaternion.set(1, 0, 0, 0)
-    else mesh.quaternion.setFromUnitVectors(this.up, n)
+  private layCable(segs: THREE.Mesh[], a: THREE.Vector3, b: THREE.Vector3, sag: number): void {
+    this.cableMid.copy(a).lerp(b, 0.5)
+    this.cableMid.y -= sag
+    const n = segs.length
+    for (let i = 0; i < n; i++) {
+      this.pointOnCable(a, this.cableMid, b, i / n, this.segA)
+      this.pointOnCable(a, this.cableMid, b, (i + 1) / n, this.segB)
+      const seg = segs[i]
+      this.dir.copy(this.segB).sub(this.segA)
+      const len = Math.max(0.05, this.dir.length())
+      seg.position.copy(this.segA).lerp(this.segB, 0.5)
+      seg.scale.set(1, len, 1)
+      const axis = this.dir.multiplyScalar(1 / len)
+      if (axis.y < -0.999) seg.quaternion.set(1, 0, 0, 0)
+      else seg.quaternion.setFromUnitVectors(this.up, axis)
+      seg.visible = true
+    }
+  }
+
+  private pointOnCable(a: THREE.Vector3, mid: THREE.Vector3, b: THREE.Vector3, t: number, out: THREE.Vector3): void {
+    const u = 1 - t
+    out.set(0, 0, 0)
+    out.addScaledVector(a, u * u)
+    out.addScaledVector(mid, 2 * u * t)
+    out.addScaledVector(b, t * t)
   }
 
   private objective(): { text: string; detail: string; pos: THREE.Vector3 } {
@@ -523,6 +570,7 @@ export class Game {
       prompt: npc ? `E   ${npc.name}` : '',
       hint: this.mode === 'play' && this.hintLife > 0 ? 'Hold left mouse or F · release at the bottom · Shift zip · C dive' : '',
       sling: this.slingLife > 0 ? this.slingText : '',
+      slingWindow: this.player.slingWindow,
       anchorHot: Boolean(this.player.preview) && !this.player.grounded,
       debug: this.debug
         ? `${this.player.swinging ? 'swing' : this.player.grounded ? 'ground' : 'air'}  ${this.player.speed.toFixed(1)} m/s  rope ${this.player.rope.toFixed(1)}`
