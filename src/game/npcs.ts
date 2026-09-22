@@ -38,7 +38,8 @@ function placard(text: string): THREE.Mesh {
   g.fillStyle = '#f4f1ea'
   g.fillRect(0, 0, 256, 128)
   g.fillStyle = '#1a120e'
-  g.font = '700 40px Outfit, Segoe UI, sans-serif'
+  g.font = `${text.length > 14 ? 28 : 40}px Outfit, Segoe UI, sans-serif`
+  g.font = `700 ${g.font}`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
   g.fillText(text, 128, 64)
@@ -136,14 +137,22 @@ export class Crowd {
     this.addNamed('jun', 'Jun Park', city.jun, 0x3e6d8c, 1, 'jun')
     this.addNamed('ivo', 'Ivo Pell', city.ivo, 0xc9843a, 2, 'ivo')
     this.addNamed('mara', 'Mara Ell', city.mara, 0xc4553a, 3, 'mara')
-    const protestNames = ['Ren', 'Sol', 'Kit', 'Ames', 'Noor', 'Pia']
-    for (let i = 0; i < protestNames.length; i++) {
+    const officeNames = ['Ren', 'Sol', 'Kit']
+    const officeSigns = ['RESET', 'GROK BOT', 'CURSOR']
+    for (let i = 0; i < officeNames.length; i++) {
       const pos = city.protest.clone()
-      pos.x += (i - 2.5) * 1.15
-      pos.z += (i % 2) * 0.85
-      this.addNamed(`protest${i}`, protestNames[i], pos, COATS[i % COATS.length], 30 + i, 'crowd')
-      const signs = ['DATACENTER', 'RESET IT', 'OUR GRID', 'NO QUIET', 'LIGHTS', 'OUTSIDE']
-      this.npcs[this.npcs.length - 1].group.add(placard(signs[i]))
+      pos.x += (i - 1) * 2.2
+      pos.z += 1.4
+      this.addNamed(`protest${i}`, officeNames[i], pos, COATS[i % COATS.length], 30 + i, 'crowd')
+      this.npcs[this.npcs.length - 1].group.add(placard(officeSigns[i]))
+    }
+    const supportNames = ['Noor', 'Pia', 'Ames']
+    const supportSigns = ['WE SUPPORT NEURALINK', 'FOR THE LINK', 'NEURALINK']
+    for (let i = 0; i < supportNames.length; i++) {
+      const pos = city.neuralink.clone()
+      pos.x += (i - 1) * 1.4
+      this.addNamed(`support${i}`, supportNames[i], pos, COATS[(i + 3) % COATS.length], 40 + i, 'crowd')
+      this.npcs[this.npcs.length - 1].group.add(placard(supportSigns[i]))
     }
     this.addPair('lale', 'Lale', 'Rafi', new THREE.Vector3(-14, 0, 22), 4)
     this.addPair('nori', 'Nori', 'Pavel', new THREE.Vector3(18, 0, -16), 6)
@@ -308,9 +317,11 @@ export class Crowd {
       const flyby = dxz < 13 && dy > 2 && dy < 28 && body.speed > 13
       const chat = npc.pair && dxz < 8 && body.speed < 5 && Math.abs(dy) < 4
       if ((flyby || chat) && npc.barkCd <= 0 && npc.id !== talkingId) {
-        const text = npc.id.startsWith('protest') && npc.path.length === 0
-        ? 'Reset is on the roof.'
-        : npc.pair && !flyby
+        const text = npc.id.startsWith('support') && npc.path.length === 0
+        ? 'We support Neuralink.'
+        : npc.id.startsWith('protest') && npc.path.length === 0
+          ? 'Reset is in front of the offices.'
+          : npc.pair && !flyby
           ? pairBark(npc.index + Math.floor(performance.now() / 4000))
           : barkLine(npc.index)
         this.barks.push({ text, world: npc.pos.clone().setY(npc.pos.y + 2.15), life: 2.2 })

@@ -291,6 +291,8 @@ export class City {
   readonly extract = new THREE.Vector3()
   readonly fountain = new THREE.Vector3(0, 0, 0)
   readonly datacenter = new THREE.Vector3()
+  readonly resetPad = new THREE.Vector3()
+  readonly neuralink = new THREE.Vector3()
   readonly protest = new THREE.Vector3()
   readonly starlink = new THREE.Vector3()
   readonly chargers: THREE.Vector3[] = []
@@ -570,28 +572,50 @@ export class City {
   private finishJobSites(dark: THREE.Material): void {
     if (this.datacenter.y === 0) this.datacenter.set(140, 14, 48)
     this.protest.copy(this.openSpot(this.datacenter.x + 6, this.datacenter.z + 16, () => 0.42))
+    this.neuralink.copy(this.openSpot(this.protest.x + 26, this.protest.z + 6, () => 0.4))
+    this.resetPad.set(this.protest.x, 0, this.protest.z + 5)
     if (this.starlink.y === 0) this.starlink.set(36, 18, 170)
     while (this.chargers.length < 3) {
       const spot = this.openSpot(-150 + this.chargers.length * 22, 20, () => 0.35)
       spot.y = 1.5
       this.chargers.push(spot)
     }
-    this.addConsole(this.datacenter, dark, 'RESET', 'DATACENTER', '#ffb15a')
+    this.addOfficeRow(this.protest)
+    this.addConsole(this.resetPad, dark, 'RESET', 'GROK BOT · CURSOR · DATACENTER', '#ffb15a')
     this.addDish(this.starlink)
     this.addConsole(this.starlink, dark, 'REALIGN', 'STARLINK', '#c5ddff')
     for (const post of this.chargers) this.addCharger(post)
-    this.dataBeam = this.raiseColumn(this.datacenter.x, this.datacenter.y, this.datacenter.z, '#ffb15a', 58)
+    this.dataBeam = this.raiseColumn(this.resetPad.x, 0, this.resetPad.z, '#ffb15a', 46)
     this.starBeam = this.raiseColumn(this.starlink.x, this.starlink.y, this.starlink.z, '#c5ddff', 58)
     this.chargerBeams = this.chargers.map((post) => this.raiseColumn(post.x, 0, post.z, '#f4f4f2', 24))
-    const crowdSign = new THREE.Mesh(
+    const support = new THREE.Mesh(
       new THREE.PlaneGeometry(9, 3.4),
       new THREE.MeshBasicMaterial({
-        map: billboardTexture('NEURALINK', 'THEY WANT THE RESET', '#d7ecff'),
+        map: billboardTexture('NEURALINK', 'WE SUPPORT NEURALINK', '#d7ecff'),
         side: THREE.DoubleSide,
       }),
     )
-    crowdSign.position.set(this.protest.x, 4.2, this.protest.z)
-    this.group.add(crowdSign)
+    support.position.set(this.neuralink.x, 4.2, this.neuralink.z)
+    this.group.add(support)
+  }
+
+  private addOfficeRow(at: THREE.Vector3): void {
+    const offices = [
+      { name: 'GROK BOT', line: 'THE COURIER', ink: '#f4f1ea' },
+      { name: 'CURSOR', line: 'THE EDITOR', ink: '#d7ecff' },
+      { name: 'DATACENTER', line: 'THE GRID', ink: '#ffb15a' },
+    ]
+    offices.forEach((office, i) => {
+      const board = new THREE.Mesh(
+        new THREE.PlaneGeometry(7.2, 3),
+        new THREE.MeshBasicMaterial({
+          map: billboardTexture(office.name, office.line, office.ink),
+          side: THREE.DoubleSide,
+        }),
+      )
+      board.position.set(at.x + (i - 1) * 8.2, 3.4, at.z)
+      this.group.add(board)
+    })
   }
 
   private raiseColumn(x: number, y: number, z: number, color: string, height: number): THREE.Mesh {

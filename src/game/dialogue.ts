@@ -103,7 +103,7 @@ export function conversation(
         : [
             { speaker: 'Nia Voss', text: 'You came down the long way. Good. The stairs take all night.' },
             { speaker: 'Nia Voss', text: 'Four relays are dark. Glass Mile, Lantern Row, the Foundry, Antenna Ward. Any order. Swing through the beam and it wakes.' },
-            { speaker: 'Nia Voss', text: 'The Foundry datacenter has a crowd that will not move until someone stands on the roof and presses reset. The Starlink dish in Antenna Ward is blind until you realign it. Three Tesla posts on Lantern Row are dark. Swing through them.' },
+            { speaker: 'Nia Voss', text: 'The reset stands on the street in front of the Grok Bot, Cursor, and datacenter offices. Press it. Neuralink is the other crowd. They are there to support the link, not to block it. The Starlink dish in Antenna Ward is blind until you realign it. Three Tesla posts on Lantern Row are dark.' },
             { speaker: 'Nia Voss', text: 'When the fourth relay agrees, a pad opens on the tall roof north of here. That is the way out of the job, not out of the city.' },
           ],
     }

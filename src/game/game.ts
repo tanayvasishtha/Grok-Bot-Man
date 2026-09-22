@@ -552,7 +552,7 @@ export class Game {
   }
 
   private tryConsole(): boolean {
-    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 3.4, true)) {
+    if (!this.datacenterDone && this.nearSite(this.city.resetPad, 3.4, true)) {
       this.datacenterDone = true
       this.city.sealConsole('data')
       this.score += 800
@@ -585,7 +585,7 @@ export class Game {
 
   private usePrompt(): string {
     if (!this.mission || !this.player.grounded) return ''
-    if (!this.datacenterDone && this.nearSite(this.city.datacenter, 3.4, true)) return 'E   Reset'
+    if (!this.datacenterDone && this.nearSite(this.city.resetPad, 3.4, true)) return 'E   Reset'
     if (!this.starlinkDone && this.nearSite(this.city.starlink, 3.4, true)) return 'E   Realign'
     return ''
   }
@@ -626,8 +626,8 @@ export class Game {
       })
     }
     if (!this.datacenterDone) {
-      const d = Math.hypot(this.city.datacenter.x - this.player.pos.x, this.city.datacenter.z - this.player.pos.z)
-      jobs.push({ text: 'Reset the datacenter', detail: `${Math.round(d)} m · E on the roof`, pos: this.city.datacenter, color: '#ffb15a', d })
+      const d = Math.hypot(this.city.resetPad.x - this.player.pos.x, this.city.resetPad.z - this.player.pos.z)
+      jobs.push({ text: 'Reset in front of the offices', detail: `${Math.round(d)} m · Grok Bot, Cursor, Datacenter`, pos: this.city.resetPad, color: '#ffb15a', d })
     }
     if (!this.starlinkDone) {
       const d = Math.hypot(this.city.starlink.x - this.player.pos.x, this.city.starlink.z - this.player.pos.z)
