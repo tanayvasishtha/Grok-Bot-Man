@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host :: --port 47331 --strictPort",
+    "dev": "node scripts/dev-server.mjs",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host :: --port 47331 --strictPort"
+    "preview": "node scripts/dev-server.mjs --preview"
   },
   "dependencies": {
     "three": "^0.170.0"
