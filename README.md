@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL Vite prints. The dev server uses port **47331**.
+Open the local URL Vite prints. The dev server in this project uses port **47331**.
 
 ```bash
 npm run build
