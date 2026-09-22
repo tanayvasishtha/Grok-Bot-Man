@@ -1,5 +1,37 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { mulberry32 } from './rng'
+
+function joinGeometry(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const merged = mergeGeometries(parts)
+  if (!merged) throw new Error('Could not build a city mesh')
+  return merged
+}
+
+function facadeTrim(w: number, d: number, h: number, base: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = []
+  const pier = new THREE.BoxGeometry(0.42, h, 0.42)
+  const hx = w / 2 + 0.06
+  const hz = d / 2 + 0.06
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) parts.push(placeGeometry(pier, sx * hx, base + h / 2, sz * hz))
+  }
+  const courses = h > 16 ? [base + h * 0.38, base + h * 0.72] : [base + h * 0.55]
+  for (const y of courses) {
+    parts.push(placeGeometry(new THREE.BoxGeometry(w + 0.28, 0.28, d + 0.28), 0, y, 0))
+  }
+  return joinGeometry(parts)
+}
+
+function placeGeometry(geo: THREE.BufferGeometry, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): THREE.BufferGeometry {
+  const placed = geo.clone()
+  placed.applyMatrix4(new THREE.Matrix4().compose(
+    new THREE.Vector3(x, y, z),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)),
+    new THREE.Vector3(1, 1, 1),
+  ))
+  return placed
+}
 
 export const CITY = {
   count: 11,
@@ -35,34 +67,46 @@ type Car = {
 }
 
 function windowTexture(kind: 'cool' | 'warm' | 'mix'): THREE.CanvasTexture {
+  const width = 256
+  const height = 512
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 256
+  canvas.width = width
+  canvas.height = height
   const g = canvas.getContext('2d')!
-  g.fillStyle = '#000'
-  g.fillRect(0, 0, 128, 256)
-  const cols = 8
-  const rows = 18
-  const cw = 128 / cols
-  const ch = 256 / rows
+  g.fillStyle = '#14181e'
+  g.fillRect(0, 0, width, height)
+  const cols = 6
+  const rows = 14
+  const cw = width / cols
+  const ch = height / rows
+  g.fillStyle = '#2a313a'
+  for (let x = 0; x <= cols; x++) g.fillRect(x * cw - 1.5, 0, 3, height)
+  for (let y = 0; y <= rows; y++) g.fillRect(0, y * ch - 1.5, width, 3)
   for (let y = 0; y < rows; y++) {
+    const store = y >= rows - 2
     for (let x = 0; x < cols; x++) {
-      if (Math.random() < 0.42) continue
       const roll = Math.random()
-      let color = '#f0d2b0'
-      if (kind === 'cool') color = roll > 0.72 ? '#d5e4f5' : '#f2d3ae'
-      else if (kind === 'warm') color = roll > 0.82 ? '#9ecfff' : '#ffc48a'
-      else color = roll > 0.55 ? '#d5e4f5' : '#ffc48a'
-      if (roll > 0.94) color = '#fff6e8'
-      g.globalAlpha = 0.5 + Math.random() * 0.5
+      const dark = roll < (store ? 0.08 : 0.38)
+      let color = '#0c1016'
+      if (!dark) {
+        if (store) color = roll > 0.72 ? '#fff1d6' : kind === 'cool' ? '#d5e6f4' : '#ffc48a'
+        else if (kind === 'cool') color = roll > 0.8 ? '#f3d7b4' : '#c9ddf0'
+        else if (kind === 'warm') color = roll > 0.86 ? '#d5e6f4' : '#ffb27a'
+        else color = roll > 0.5 ? '#d5e4f2' : '#ffc48a'
+        if (roll > 0.93) color = '#fff8ee'
+      }
+      g.globalAlpha = dark ? 1 : 0.55 + Math.random() * 0.45
       g.fillStyle = color
-      g.fillRect(x * cw + 2.2, y * ch + 2.4, cw - 4.4, ch - 5)
+      const padX = store ? 3 : 5
+      const padY = store ? 4 : 6
+      g.fillRect(x * cw + padX, y * ch + padY, cw - padX * 2, ch - padY * 2)
     }
   }
   g.globalAlpha = 1
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.anisotropy = 8
   return tex
 }
 
@@ -91,25 +135,39 @@ const glassFinMat = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.55,
 })
 const hangBulbMat = new THREE.MeshBasicMaterial({ color: 0xffb15a })
+const awningMat = new THREE.MeshStandardMaterial({
+  color: 0x4a3020,
+  emissive: new THREE.Color('#ff9a4a'),
+  emissiveIntensity: 0.4,
+  roughness: 0.55,
+})
 const dishMat = new THREE.MeshStandardMaterial({ color: 0xc5ced6, metalness: 0.72, roughness: 0.28 })
+const mastTipMat = new THREE.MeshBasicMaterial({ color: 0xb7f3ff })
 
 function signTexture(text: string, color: string): THREE.CanvasTexture {
+  return billboardTexture(text, '', color)
+}
+
+function billboardTexture(title: string, line: string, ink: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
-  canvas.width = 512
-  canvas.height = 128
+  canvas.width = 1024
+  canvas.height = line ? 420 : 220
   const g = canvas.getContext('2d')!
-  g.fillStyle = '#120e0c'
-  g.fillRect(0, 0, 512, 128)
-  g.strokeStyle = color
-  g.globalAlpha = 0.9
-  g.lineWidth = 4
-  g.strokeRect(8, 8, 496, 112)
-  g.globalAlpha = 1
-  g.fillStyle = color
-  g.font = '600 54px Outfit, Segoe UI, sans-serif'
+  g.fillStyle = '#090b10'
+  g.fillRect(0, 0, canvas.width, canvas.height)
+  g.strokeStyle = ink
+  g.lineWidth = 10
+  g.strokeRect(16, 16, canvas.width - 32, canvas.height - 32)
+  g.fillStyle = ink
+  g.font = '700 132px Outfit, Segoe UI, sans-serif'
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.fillText(text, 256, 66)
+  g.fillText(title, canvas.width / 2, line ? 160 : canvas.height / 2)
+  if (line) {
+    g.globalAlpha = 0.78
+    g.font = '500 52px Outfit, Segoe UI, sans-serif'
+    g.fillText(line, canvas.width / 2, 290)
+  }
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   return tex
@@ -190,6 +248,18 @@ function groundTexture(): THREE.CanvasTexture {
     g.stroke()
   }
   g.setLineDash([])
+  g.fillStyle = 'rgba(232, 228, 218, 0.62)'
+  for (let i = 1; i < CITY.count; i++) {
+    for (let j = 1; j < CITY.count; j++) {
+      if ((i + j) % 2 !== 0) continue
+      const px = toPx(CITY.origin + i * CITY.cell)
+      const pz = toPx(CITY.origin + j * CITY.cell)
+      for (let s = -3; s <= 3; s++) {
+        g.fillRect(px - rw * 0.36, pz + s * 6 - 1.5, rw * 0.72, 2.4)
+        g.fillRect(px + s * 6 - 1.5, pz - rw * 0.36, 2.4, rw * 0.72)
+      }
+    }
+  }
   const plaza = toPx(0)
   const pr = (30 / CITY.size) * size
   g.fillStyle = '#3c3833'
@@ -220,27 +290,43 @@ export class City {
   readonly beacons: Spot[] = []
   readonly extract = new THREE.Vector3()
   readonly fountain = new THREE.Vector3(0, 0, 0)
+  readonly datacenter = new THREE.Vector3()
+  readonly protest = new THREE.Vector3()
+  readonly starlink = new THREE.Vector3()
+  readonly chargers: THREE.Vector3[] = []
+  private datacenterPick = Infinity
+  private consoleLamps: THREE.Mesh[] = []
+  private chargerLamps: THREE.Mesh[] = []
+  private jobBeams: THREE.Mesh[] = []
+  private chargerBeams: THREE.Mesh[] = []
+  private dataBeam!: THREE.Mesh
+  private starBeam!: THREE.Mesh
+  private engineGlows: THREE.Mesh[] = []
   private cars: Car[] = []
-  private carMesh: THREE.InstancedMesh
-  private headMesh: THREE.InstancedMesh
-  private tailMesh: THREE.InstancedMesh
+  private carParts: THREE.InstancedMesh[] = []
   private dummy = new THREE.Object3D()
   private water: THREE.Mesh
-  private forward = new THREE.Vector3()
   private wardLights = new Map<string, THREE.PointLight>()
 
   constructor() {
     const rng = mulberry32(7)
     const box = new THREE.BoxGeometry(1, 1, 1)
     const roofMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2e34,
-      roughness: 0.88,
-      metalness: 0.18,
+      color: 0x1c2128,
+      roughness: 0.9,
+      metalness: 0.22,
     })
     const darkMat = new THREE.MeshStandardMaterial({
       color: 0x1a1d22,
       roughness: 0.7,
       metalness: 0.4,
+    })
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: 0x9aa6b4,
+      metalness: 0.88,
+      roughness: 0.2,
+      emissive: new THREE.Color('#b7c6d6'),
+      emissiveIntensity: 0.22,
     })
     const windows = {
       cool: windowTexture('cool'),
@@ -271,8 +357,17 @@ export class City {
     let crownY = 0
     let crownZ = 0
     let crownId = -1
-    const signs = ['GLASS MILE', 'NIGHT RELAY', 'FOUNDRY', 'LANTERN ROW', 'KEEP THE THREAD', 'ANTENNA', 'LOGIT', 'PLAZA']
-    let signI = 0
+    const brands: { name: string; line: string; ink: string }[] = [
+      { name: 'TESLA', line: 'THE CAR IS THE GRID', ink: '#f4f4f2' },
+      { name: 'SPACEX', line: 'THE SHIP IS SOUTH', ink: '#f7f7f7' },
+      { name: 'NEURALINK', line: 'QUIET THE NOISE', ink: '#d7ecff' },
+      { name: 'STARLINK', line: 'AIM THE DISH', ink: '#c5ddff' },
+      { name: 'TESLA', line: 'LANTERN ROW STALLS', ink: '#e8e8e6' },
+      { name: 'X', line: 'THE PLAZA IS LISTENING', ink: '#f2f2f2' },
+      { name: 'SPACEX', line: 'STAINLESS OVER THE MASTS', ink: '#ffffff' },
+      { name: 'NEURALINK', line: 'THE LINK STAYS UP', ink: '#b7d4ff' },
+    ]
+    let brandI = 0
 
     for (let i = 0; i < CITY.count; i++) {
       for (let j = 0; j < CITY.count; j++) {
@@ -294,11 +389,11 @@ export class City {
         const podiumH = setback ? h * (0.28 + rng() * 0.18) : h
         const kind = north ? 'cool' : east || ward === 'lantern' ? 'warm' : 'mix'
         const side = new THREE.MeshStandardMaterial({
-          color: kind === 'cool' ? 0x9aafc4 : kind === 'warm' ? 0xb08972 : 0x9aa3ad,
-          roughness: kind === 'cool' ? 0.22 : 0.42,
-          metalness: kind === 'cool' ? 0.78 : 0.55,
-          emissive: new THREE.Color(kind === 'warm' ? '#ffc9a0' : '#f0d8c0'),
-          emissiveIntensity: ward === 'lantern' ? 1.25 : 0.95,
+          color: kind === 'cool' ? 0x24303c : kind === 'warm' ? 0x3a2c28 : 0x2a3038,
+          roughness: kind === 'cool' ? 0.18 : 0.46,
+          metalness: kind === 'cool' ? 0.82 : 0.48,
+          emissive: new THREE.Color(kind === 'warm' ? '#ffc9a0' : '#f4e2cc'),
+          emissiveIntensity: ward === 'lantern' ? 1.45 : 1.15,
         })
         const map = windows[kind].clone()
         map.repeat.set(Math.max(2, w / 3.1), Math.max(2, h / 3.3))
@@ -314,6 +409,18 @@ export class City {
         podium.userData.buildingId = id
         this.group.add(podium)
         this.solids.push(podium)
+        const plinth = new THREE.Mesh(box, darkMat)
+        plinth.scale.set(w + 0.7, 1.25, d + 0.7)
+        plinth.position.set(x, 0.62, z)
+        plinth.receiveShadow = true
+        this.group.add(plinth)
+        const trim = new THREE.Mesh(facadeTrim(w, d, podiumH, 0), trimMat)
+        this.group.add(trim)
+        if (ward === 'lantern' || ward === 'foundry') {
+          const awning = new THREE.Mesh(new THREE.BoxGeometry(Math.min(w * 0.7, 16), 0.08, 1.15), awningMat)
+          awning.position.set(x, Math.min(3.4, podiumH * 0.42), z + d / 2 + 0.45)
+          this.group.add(awning)
+        }
 
         const boxes = [
           new THREE.Box3(
@@ -336,6 +443,9 @@ export class City {
           tower.userData.buildingId = id
           this.group.add(tower)
           this.solids.push(tower)
+          const towerTrim = new THREE.Mesh(facadeTrim(tw, td, h - podiumH, 0), trimMat)
+          towerTrim.position.set(x + ox, podiumH, z + oz)
+          this.group.add(towerTrim)
           boxes.push(
             new THREE.Box3(
               new THREE.Vector3(x + ox - tw / 2, podiumH, z + oz - td / 2),
@@ -372,18 +482,20 @@ export class City {
           this.group.add(ac)
         }
 
-        const signChance = ward === 'lantern' ? 0.58 : ward === 'glass' ? 0.84 : 0.74
-        const label = ward === 'inner' ? (signI < signs.length ? signs[signI] : '') : WARD_SIGN[ward]
-        if (label && h > 12 && rng() > signChance) {
-          if (ward === 'inner') signI++
-          const ink = ward === 'glass' || ward === 'antenna' ? '#d7ecff' : '#ffc48a'
-          const tex = signTexture(label, ink)
+        const brand = brandI < brands.length && h > 18 ? brands[brandI] : null
+        const wardLabel = ward === 'inner' ? '' : WARD_SIGN[ward]
+        const label = brand?.name || (h > 16 && rng() > 0.72 ? wardLabel : '')
+        if (label) {
+          if (brand) brandI++
+          const ink = brand?.ink || (ward === 'glass' || ward === 'antenna' ? '#d7ecff' : '#ffc48a')
+          const wide = Boolean(brand)
+          const tex = brand ? billboardTexture(brand.name, brand.line, ink) : signTexture(label, ink)
           const sign = new THREE.Mesh(
-            new THREE.PlaneGeometry(8, 2),
+            new THREE.PlaneGeometry(wide ? 16 : 8, wide ? 6.4 : 2),
             new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
           )
           const face = rng() > 0.5 ? 1 : -1
-          sign.position.set(x, Math.min(h * 0.62, roofY - 2), z + face * (roofD / 2 + 0.08))
+          sign.position.set(x, Math.min(h * 0.55, roofY - 3), z + face * (d / 2 + 0.12))
           if (face < 0) sign.rotation.y = Math.PI
           this.group.add(sign)
         }
@@ -401,11 +513,29 @@ export class City {
           junScore = junD
           this.jun.set(x, roofY, z)
         }
-        if (roofY > 14) {
+        if (roofY > 8) {
+          const cornice = new THREE.Mesh(box, trimMat)
+          cornice.scale.set(roofW + 0.9, 0.42, roofD + 0.9)
+          cornice.position.set(x, roofY + 0.08, z)
           const lip = new THREE.Mesh(box, darkMat)
-          lip.scale.set(roofW + 0.5, 0.4, 0.28)
-          lip.position.set(x, roofY + 0.2, z - roofD / 2 - 0.1)
-          this.group.add(lip)
+          lip.scale.set(roofW + 0.5, 0.28, 0.22)
+          lip.position.set(x, roofY + 0.28, z - roofD / 2 - 0.15)
+          this.group.add(cornice, lip)
+        }
+
+        if (ward === 'foundry' && roofY > 9 && roofY < 26) {
+          const score = Math.abs(x - 150) + Math.abs(z - 50)
+          if (score < this.datacenterPick) {
+            this.datacenterPick = score
+            this.datacenter.set(x, roofY + 0.5, z)
+          }
+        }
+        if (ward === 'antenna' && roofY > 14 && roofY < 30 && this.starlink.y === 0) {
+          this.starlink.set(x, roofY + 0.55, z)
+        }
+        if (ward === 'lantern' && this.chargers.length < 3 && roofY < 18) {
+          const post = new THREE.Vector3(x, 1.5, z + d / 2 + 3.2)
+          if (!this.insideBuilding(post.x, post.z, 0.4)) this.chargers.push(post)
         }
 
         if (z < -150 && roofY > extractH) {
@@ -422,18 +552,147 @@ export class City {
 
     if (crownId >= 0) this.raiseCrown(crownX, crownY, crownZ, crownId)
     if (this.jun.lengthSq() === 0) this.jun.copy(this.spawn).add(new THREE.Vector3(-20, 0, 10))
+    this.finishJobSites(darkMat)
     this.placePeople(rng)
     this.dressSpots(darkMat)
     this.addPlaza(darkMat)
     this.beacons = this.makeBeacons()
     this.addWardLights()
     this.addLamps()
-    const traffic = this.addCars(rng)
-    this.carMesh = traffic.body
-    this.headMesh = traffic.head
-    this.tailMesh = traffic.tail
+    this.addStarship()
+    this.addCars(rng)
     this.layoutCars()
     this.water = this.group.children.find((child) => child.name === 'water') as THREE.Mesh
+  }
+
+  private finishJobSites(dark: THREE.Material): void {
+    if (this.datacenter.y === 0) this.datacenter.set(140, 14, 48)
+    this.protest.copy(this.openSpot(this.datacenter.x + 6, this.datacenter.z + 16, () => 0.42))
+    if (this.starlink.y === 0) this.starlink.set(36, 18, 170)
+    while (this.chargers.length < 3) {
+      const spot = this.openSpot(-150 + this.chargers.length * 22, 20, () => 0.35)
+      spot.y = 1.5
+      this.chargers.push(spot)
+    }
+    this.addConsole(this.datacenter, dark, 'RESET', 'DATACENTER', '#ffb15a')
+    this.addDish(this.starlink)
+    this.addConsole(this.starlink, dark, 'REALIGN', 'STARLINK', '#c5ddff')
+    for (const post of this.chargers) this.addCharger(post)
+    this.dataBeam = this.raiseColumn(this.datacenter.x, this.datacenter.y, this.datacenter.z, '#ffb15a', 58)
+    this.starBeam = this.raiseColumn(this.starlink.x, this.starlink.y, this.starlink.z, '#c5ddff', 58)
+    this.chargerBeams = this.chargers.map((post) => this.raiseColumn(post.x, 0, post.z, '#f4f4f2', 24))
+    const crowdSign = new THREE.Mesh(
+      new THREE.PlaneGeometry(9, 3.4),
+      new THREE.MeshBasicMaterial({
+        map: billboardTexture('NEURALINK', 'THEY WANT THE RESET', '#d7ecff'),
+        side: THREE.DoubleSide,
+      }),
+    )
+    crowdSign.position.set(this.protest.x, 4.2, this.protest.z)
+    this.group.add(crowdSign)
+  }
+
+  private raiseColumn(x: number, y: number, z: number, color: string, height: number): THREE.Mesh {
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.7, height, 8, 1, true),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.16,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    )
+    beam.position.set(x, y + height / 2, z)
+    beam.userData.open = true
+    this.jobBeams.push(beam)
+    this.group.add(beam)
+    return beam
+  }
+
+  lightCharger(index: number): void {
+    const lamp = this.chargerLamps[index]
+    if (lamp) (lamp.material as THREE.MeshBasicMaterial).color.set('#9be7ff')
+    this.closeColumn(this.chargerBeams[index], '#9be7ff')
+  }
+
+  sealConsole(which: 'data' | 'star'): void {
+    const lamp = this.consoleLamps[which === 'data' ? 0 : 1]
+    if (lamp) (lamp.material as THREE.MeshBasicMaterial).color.set('#e7a15a')
+    this.closeColumn(which === 'data' ? this.dataBeam : this.starBeam, '#e7a15a')
+  }
+
+  private closeColumn(beam: THREE.Mesh | undefined, color: string): void {
+    if (!beam) return
+    beam.userData.open = false
+    const mat = beam.material as THREE.MeshBasicMaterial
+    mat.color.set(color)
+    mat.opacity = 0.1
+  }
+
+  private addConsole(at: THREE.Vector3, dark: THREE.Material, title: string, line: string, ink: string): void {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.6, 0.07, 8, 28),
+      new THREE.MeshBasicMaterial({ color: ink }),
+    )
+    ring.rotation.x = Math.PI / 2
+    ring.position.set(at.x, at.y + 0.06, at.z)
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.15, 0.45), dark)
+    stand.position.set(at.x, at.y + 0.6, at.z)
+    const button = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.08, 0.28),
+      new THREE.MeshBasicMaterial({ color: ink }),
+    )
+    button.position.set(at.x, at.y + 1.2, at.z)
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.8, 2),
+      new THREE.MeshBasicMaterial({ map: billboardTexture(title, line, ink), side: THREE.DoubleSide }),
+    )
+    sign.position.set(at.x, at.y + 2.5, at.z)
+    this.consoleLamps.push(button)
+    this.group.add(ring, stand, button, sign)
+  }
+
+  private addDish(at: THREE.Vector3): void {
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.12, 2.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0xc5ced6, metalness: 0.8, roughness: 0.25 }),
+    )
+    mast.position.set(at.x + 2.2, at.y + 1.1, at.z)
+    const dish = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.15, 1.15, 0.08, 16),
+      new THREE.MeshStandardMaterial({ color: 0xe7eef5, metalness: 0.7, roughness: 0.22 }),
+    )
+    dish.rotation.x = 1.05
+    dish.position.set(at.x + 2.2, at.y + 2.3, at.z)
+    this.group.add(mast, dish)
+  }
+
+  private addCharger(at: THREE.Vector3): void {
+    const white = new THREE.MeshStandardMaterial({ color: 0xf3f3f1, roughness: 0.28, metalness: 0.35 })
+    const cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.7, 0.28), white)
+    cabinet.position.set(at.x, 0.85, at.z)
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 1.15), white)
+    canopy.position.set(at.x, 1.85, at.z)
+    const cable = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 1.1, 6),
+      new THREE.MeshStandardMaterial({ color: 0xc4553a, roughness: 0.5 }),
+    )
+    cable.position.set(at.x + 0.28, 1.15, at.z)
+    cable.rotation.z = 0.5
+    const lamp = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.08, 0.08),
+      new THREE.MeshBasicMaterial({ color: 0x3a3a3a }),
+    )
+    lamp.position.set(at.x, 1.55, at.z + 0.16)
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.3, 0.55),
+      new THREE.MeshBasicMaterial({ map: billboardTexture('TESLA', 'CHARGE', '#f4f4f2'), side: THREE.DoubleSide }),
+    )
+    sign.position.set(at.x, 2.15, at.z)
+    this.chargerLamps.push(lamp)
+    this.group.add(cabinet, canopy, cable, lamp, sign)
   }
 
   private placePeople(rng: () => number): void {
@@ -536,7 +795,9 @@ export class City {
       stack.position.set(x - w * 0.16, y + stackH / 2, z - d * 0.1)
       const stack2 = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.45, stackH * 0.62, 8), dark)
       stack2.position.set(x + w * 0.18, y + stackH * 0.31, z + d * 0.12)
-      this.group.add(stack, stack2)
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), hangBulbMat)
+      cap.position.set(x - w * 0.16, y + stackH + 0.15, z - d * 0.1)
+      this.group.add(stack, stack2, cap)
       this.anchors.push({ point: new THREE.Vector3(x - w * 0.16, y + stackH + 0.6, z - d * 0.1), buildingId: id })
       const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, Math.max(6, w * 0.7), 6), dark)
       pipe.rotation.z = Math.PI / 2
@@ -555,7 +816,9 @@ export class City {
       sideA.position.set(x - w * 0.28, y + mastH * 0.27, z + d * 0.2)
       const sideB = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, mastH * 0.4, 5), dark)
       sideB.position.set(x + w * 0.22, y + mastH * 0.2, z - d * 0.18)
-      this.group.add(mast, dish, sideA, sideB)
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), mastTipMat)
+      tip.position.set(x, y + mastH + 0.2, z)
+      this.group.add(mast, dish, sideA, sideB, tip)
       this.anchors.push({ point: new THREE.Vector3(x, y + mastH + 0.4, z), buildingId: id })
     }
   }
@@ -572,7 +835,9 @@ export class City {
     }
     const spire = new THREE.Mesh(new THREE.ConeGeometry(0.35, 7, 6), glassFinMat)
     spire.position.set(x, hy + 3.5, z)
-    this.group.add(spire)
+    const crownTip = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), mastTipMat)
+    crownTip.position.set(x, hy + 7.15, z)
+    this.group.add(spire, crownTip)
     this.anchors.push({ point: new THREE.Vector3(x, hy + 7.2, z), buildingId: id })
     const pad = new THREE.Mesh(
       new THREE.CylinderGeometry(3.2, 3.4, 0.18, 20),
@@ -727,33 +992,102 @@ export class City {
     for (const x of roads) {
       for (const z of roads) positions.push(new THREE.Vector3(x, 0, z))
     }
-    const pole = new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(0.08, 0.1, 6, 6),
-      new THREE.MeshStandardMaterial({ color: 0x2a2d32, metalness: 0.7, roughness: 0.35 }),
-      positions.length,
-    )
+    const metal = new THREE.MeshStandardMaterial({ color: 0x2a2d32, metalness: 0.7, roughness: 0.35 })
+    const pole = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.1, 5.4, 6), metal, positions.length)
+    const arm = new THREE.InstancedMesh(new THREE.BoxGeometry(1.25, 0.07, 0.07), metal, positions.length)
+    const head = new THREE.InstancedMesh(new THREE.BoxGeometry(0.28, 0.1, 0.18), metal, positions.length)
     const bulb = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(0.22, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0xffd7ae }),
+      new THREE.SphereGeometry(0.12, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffe1b8 }),
       positions.length,
     )
     const dummy = new THREE.Object3D()
     positions.forEach((p, i) => {
-      dummy.position.set(p.x, 3, p.z)
+      dummy.position.set(p.x, 2.7, p.z)
       dummy.scale.set(1, 1, 1)
       dummy.rotation.set(0, 0, 0)
       dummy.updateMatrix()
       pole.setMatrixAt(i, dummy.matrix)
-      dummy.position.set(p.x, 6.15, p.z)
+      dummy.position.set(p.x + 0.55, 5.45, p.z)
+      dummy.updateMatrix()
+      arm.setMatrixAt(i, dummy.matrix)
+      dummy.position.set(p.x + 1.15, 5.32, p.z)
+      dummy.updateMatrix()
+      head.setMatrixAt(i, dummy.matrix)
+      dummy.position.set(p.x + 1.15, 5.2, p.z)
       dummy.updateMatrix()
       bulb.setMatrixAt(i, dummy.matrix)
     })
-    this.group.add(pole, bulb)
+    this.group.add(pole, arm, head, bulb)
     return bulb
   }
 
-  private addCars(rng: () => number): { body: THREE.InstancedMesh; head: THREE.InstancedMesh; tail: THREE.InstancedMesh } {
-    const colors = [0xc5c8ce, 0x8d939c, 0xd8c3a5, 0x6e8ea8, 0xb06448, 0x24272c]
+  private addStarship(): void {
+    const steel = new THREE.MeshStandardMaterial({
+      color: 0xd7dbdf,
+      metalness: 0.94,
+      roughness: 0.24,
+      emissive: new THREE.Color('#aeb6bf'),
+      emissiveIntensity: 0.18,
+    })
+    const dark = new THREE.MeshStandardMaterial({ color: 0x23272c, metalness: 0.72, roughness: 0.38 })
+    const ship = new THREE.Group()
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(3.05, 3.35, 38, 24), steel)
+    hull.position.y = 19
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(3.05, 11, 24), steel)
+    nose.position.y = 43.5
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(3.38, 3.38, 0.35, 24), dark)
+    band.position.y = 28
+    const flapGeo = new THREE.BoxGeometry(0.28, 8, 3.4)
+    const flapL = new THREE.Mesh(flapGeo, dark)
+    flapL.position.set(-3.7, 11, 0.2)
+    flapL.rotation.z = 0.18
+    const flapR = flapL.clone()
+    flapR.position.x = 3.7
+    flapR.rotation.z = -0.18
+    const finL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 5.2, 2.6), dark)
+    finL.position.set(-3.4, 34, 0)
+    const finR = finL.clone()
+    finR.position.x = 3.4
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0x1a2430,
+      metalness: 0.2,
+      roughness: 0.12,
+      emissive: new THREE.Color('#9ecfff'),
+      emissiveIntensity: 0.4,
+    })
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.42), glass)
+      win.position.set(Math.sin(a) * 3.28, 24, Math.cos(a) * 3.28)
+      win.rotation.y = a
+      ship.add(win)
+    }
+    ship.add(hull, nose, band, flapL, flapR, finL, finR)
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, 1.7, 12), dark)
+      bell.position.set(Math.cos(a) * 1.35, 0.3, Math.sin(a) * 1.35)
+      const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.38, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xfff3c8 }),
+      )
+      glow.position.set(bell.position.x, -0.55, bell.position.z)
+      this.engineGlows.push(glow)
+      ship.add(bell, glow)
+    }
+    const mark = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 2.4),
+      new THREE.MeshBasicMaterial({ map: signTexture('SPACEX', '#f4f6f8'), side: THREE.DoubleSide }),
+    )
+    mark.position.set(0, 22, 3.4)
+    ship.add(mark)
+    ship.position.set(24, 28, 188)
+    this.group.add(ship)
+  }
+
+  private addCars(rng: () => number): void {
+    const colors = [0xf4f4f2, 0xc8cbcf, 0x1b1e22, 0x8d1e24, 0x163a66, 0xe4e0d8]
     for (let i = 1; i < CITY.count; i++) {
       const road = CITY.origin + i * CITY.cell
       if (rng() > 0.25) {
@@ -778,25 +1112,60 @@ export class City {
       }
     }
     const n = this.cars.length
-    const body = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(4.2, 0.7, 1.7),
-      new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.65, vertexColors: false }),
+    const body = joinGeometry([
+      placeGeometry(new THREE.BoxGeometry(1.86, 0.32, 4.35), 0, 0.4, 0.05),
+      placeGeometry(new THREE.BoxGeometry(1.78, 0.1, 1.55), 0, 0.52, 1.15),
+      placeGeometry(new THREE.BoxGeometry(1.82, 0.16, 0.35), 0, 0.3, 2.05),
+      placeGeometry(new THREE.BoxGeometry(1.82, 0.16, 0.28), 0, 0.32, -2.1),
+    ])
+    const cabin = joinGeometry([
+      placeGeometry(new THREE.BoxGeometry(1.68, 0.34, 2.15), 0, 0.68, -0.15),
+      placeGeometry(new THREE.BoxGeometry(1.55, 0.22, 1.15), 0, 0.86, -0.55),
+    ])
+    const wheel = new THREE.CylinderGeometry(0.32, 0.32, 0.2, 8)
+    const wheels = joinGeometry([
+      placeGeometry(wheel, -0.84, 0.32, 1.25, 0, 0, Math.PI / 2),
+      placeGeometry(wheel, 0.84, 0.32, 1.25, 0, 0, Math.PI / 2),
+      placeGeometry(wheel, -0.84, 0.32, -1.25, 0, 0, Math.PI / 2),
+      placeGeometry(wheel, 0.84, 0.32, -1.25, 0, 0, Math.PI / 2),
+    ])
+    const bar = new THREE.BoxGeometry(1.52, 0.06, 0.05)
+    const heads = placeGeometry(bar, 0, 0.46, 2.16)
+    const tails = placeGeometry(bar, 0, 0.48, -2.16)
+    const paint = new THREE.InstancedMesh(
+      body,
+      new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.42 }),
       n,
     )
-    body.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3)
-    const head = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.2, 0.16, 1.3),
-      new THREE.MeshBasicMaterial({ color: 0xfff1d6 }),
+    paint.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3)
+    const glass = new THREE.InstancedMesh(
+      cabin,
+      new THREE.MeshStandardMaterial({ color: 0x1a2430, roughness: 0.08, metalness: 0.15, transparent: true, opacity: 0.82 }),
       n,
     )
-    const tail = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.16, 0.14, 1.2),
-      new THREE.MeshBasicMaterial({ color: 0xff4d3a }),
+    const rubber = new THREE.InstancedMesh(
+      wheels,
+      new THREE.MeshStandardMaterial({ color: 0x141618, roughness: 0.85, metalness: 0.15 }),
       n,
     )
-    this.cars.forEach((car, i) => body.setColorAt(i, car.color))
-    this.group.add(body, head, tail)
-    return { body, head, tail }
+    const front = new THREE.InstancedMesh(heads, new THREE.MeshBasicMaterial({ color: 0xfff3d2 }), n)
+    const rear = new THREE.InstancedMesh(tails, new THREE.MeshBasicMaterial({ color: 0xff3b32 }), n)
+    const throwGeo = placeGeometry(new THREE.ConeGeometry(1.35, 8, 8, 1, true), 0, 0.42, 6.3, -Math.PI / 2)
+    const beams = new THREE.InstancedMesh(
+      throwGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0xfff1c4,
+        transparent: true,
+        opacity: 0.055,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      }),
+      n,
+    )
+    this.cars.forEach((car, i) => paint.setColorAt(i, car.color))
+    this.carParts = [paint, glass, rubber, front, rear, beams]
+    this.group.add(paint, glass, rubber, front, rear, beams)
   }
 
   private layoutCars(): void {
@@ -808,22 +1177,13 @@ export class City {
       if (car.along < min) car.along = max
       const x = car.axis === 'x' ? car.along : car.fixed
       const z = car.axis === 'z' ? car.along : car.fixed
-      this.dummy.position.set(x, 0.48, z)
+      this.dummy.position.set(x, 0, z)
       this.dummy.rotation.set(0, car.axis === 'x' ? (car.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : car.dir > 0 ? 0 : Math.PI, 0)
       this.dummy.scale.set(1, 1, 1)
       this.dummy.updateMatrix()
-      this.carMesh.setMatrixAt(i, this.dummy.matrix)
-      this.forward.set(car.axis === 'x' ? car.dir : 0, 0, car.axis === 'z' ? car.dir : 0)
-      this.dummy.position.set(x, 0.62, z).addScaledVector(this.forward, 2.05)
-      this.dummy.updateMatrix()
-      this.headMesh.setMatrixAt(i, this.dummy.matrix)
-      this.dummy.position.set(x, 0.58, z).addScaledVector(this.forward, -2.05)
-      this.dummy.updateMatrix()
-      this.tailMesh.setMatrixAt(i, this.dummy.matrix)
+      for (const part of this.carParts) part.setMatrixAt(i, this.dummy.matrix)
     })
-    this.carMesh.instanceMatrix.needsUpdate = true
-    this.headMesh.instanceMatrix.needsUpdate = true
-    this.tailMesh.instanceMatrix.needsUpdate = true
+    for (const part of this.carParts) part.instanceMatrix.needsUpdate = true
   }
 
   update(dt: number): void {
@@ -835,9 +1195,19 @@ export class City {
       if (car.along < min) car.along = max
     }
     this.layoutCars()
+    const time = performance.now() * 0.001
     if (this.water) {
       const mat = this.water.material as THREE.MeshStandardMaterial
-      mat.emissiveIntensity = 0.22 + Math.sin(performance.now() * 0.0015) * 0.05
+      mat.emissiveIntensity = 0.22 + Math.sin(time * 1.5) * 0.05
+    }
+    for (const beam of this.jobBeams) {
+      if (!beam.userData.open) continue
+      const mat = beam.material as THREE.MeshBasicMaterial
+      mat.opacity = 0.1 + Math.sin(time * 2.4 + beam.position.x * 0.05) * 0.06
+    }
+    for (const glow of this.engineGlows) {
+      const s = 0.82 + Math.sin(time * 7 + glow.position.x) * 0.22
+      glow.scale.setScalar(s)
     }
   }
 
@@ -848,7 +1218,7 @@ export class City {
       const z = car.axis === 'z' ? car.along : car.fixed
       const dx = feet.x - x
       const dz = feet.z - z
-      if (Math.hypot(dx, dz) < 2.1) {
+      if (Math.hypot(dx, dz) < 2.6) {
         const len = Math.hypot(dx, dz) || 1
         vel.x += (dx / len) * 6
         vel.z += (dz / len) * 6
@@ -866,7 +1236,7 @@ export class City {
   private addWardLights(): void {
     for (const beacon of this.beacons) {
       const warm = beacon.name === 'Foundry' || beacon.name === 'Lantern Row'
-      const light = new THREE.PointLight(warm ? 0xffb15a : 0x9ecfff, 0, 40, 2)
+      const light = new THREE.PointLight(warm ? 0xffb15a : 0x9ecfff, 6, 70, 2)
       light.position.set(beacon.position.x, beacon.position.y + 10, beacon.position.z)
       this.group.add(light)
       this.wardLights.set(beacon.name, light)
