@@ -44,9 +44,9 @@ export class Hero {
       color: 0xe4dfd6,
       metalness: 0.12,
       roughness: 0.28,
-      clearcoat: 0.82,
-      clearcoatRoughness: 0.18,
-      envMapIntensity: 1,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      envMapIntensity: 1.35,
     })
     const joint = new THREE.MeshStandardMaterial({
       color: 0x121418,
@@ -64,7 +64,7 @@ export class Hero {
       map: face.texture,
       emissive: new THREE.Color('#f4f1ea'),
       emissiveMap: face.texture,
-      emissiveIntensity: 0.45,
+      emissiveIntensity: 0.9,
       roughness: 0.42,
       metalness: 0.05,
     })
@@ -96,6 +96,17 @@ export class Hero {
     const seam = this.part(new THREE.BoxGeometry(0.04, 0.32, 0.02), joint)
     seam.position.set(0, 0.3, 0.132)
     this.torso.add(seam)
+    const slit = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.035, 0.02),
+      new THREE.MeshStandardMaterial({
+        color: 0xd7fbff,
+        emissive: new THREE.Color('#9be7ff'),
+        emissiveIntensity: 1.4,
+        roughness: 0.3,
+      }),
+    )
+    slit.position.set(0, 0.34, 0.14)
+    this.torso.add(slit)
     const rib = this.part(new THREE.BoxGeometry(0.42, 0.025, 0.02), joint)
     rib.position.set(0, 0.22, 0.132)
     this.torso.add(rib)
@@ -111,11 +122,27 @@ export class Hero {
     const packCap = this.part(new THREE.BoxGeometry(0.26, 0.1, 0.08), joint)
     packCap.position.set(0, 0.5, -0.22)
     this.torso.add(packCap)
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.38), screen)
+    const frame = this.part(new THREE.BoxGeometry(0.42, 0.42, 0.02), joint)
+    frame.position.set(0, 0.28, -0.27)
+    this.torso.add(frame)
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.36), screen)
     plate.position.set(0, 0.28, -0.286)
     plate.rotation.y = Math.PI
     plate.scale.x = -1
     this.torso.add(plate)
+    const spine = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.28, 0.02),
+      launchMatL,
+    )
+    spine.position.set(0, 0.42, -0.27)
+    this.torso.add(spine)
+    const hipL = this.part(new THREE.BoxGeometry(0.1, 0.16, 0.16), shell)
+    hipL.position.set(-0.2, -0.16, 0.02)
+    hipL.rotation.z = 0.25
+    const hipR = hipL.clone()
+    hipR.position.x = 0.2
+    hipR.rotation.z = -0.25
+    this.torso.add(hipL, hipR)
 
     this.head.position.set(0, 0.68, 0.03)
     this.torso.add(this.head)
@@ -125,8 +152,11 @@ export class Hero {
     const helmet = this.part(new THREE.SphereGeometry(0.17, 20, 16), shell)
     helmet.scale.set(1.05, 1.12, 1.04)
     this.head.add(helmet)
-    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.24), screen)
-    facePlane.position.set(0, 0.01, 0.158)
+    const bezel = this.part(new THREE.BoxGeometry(0.22, 0.2, 0.03), joint)
+    bezel.position.set(0, 0.01, 0.145)
+    this.head.add(bezel)
+    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.16), screen)
+    facePlane.position.set(0, 0.01, 0.164)
     this.head.add(facePlane)
 
     this.armR.position.set(-0.36, 0.42, 0)
@@ -236,6 +266,9 @@ export class Hero {
     const shinBand = this.part(new THREE.BoxGeometry(0.12, 0.035, 0.08), joint)
     shinBand.position.set(0, 0, 0.2)
     shin.add(shinBand)
+    const guard = this.part(new THREE.BoxGeometry(0.1, 0.04, 0.28), shell)
+    guard.position.set(side * 0.02, 0.05, 0.28)
+    shin.add(guard)
     const foot = this.part(new THREE.BoxGeometry(0.16, 0.05, 0.3), shell)
     foot.position.set(0, -0.02, 0.58)
     shin.add(foot)
@@ -312,7 +345,7 @@ export class Hero {
     }
 
     this.root.updateMatrixWorld(true)
-    const hand = this.activeHand === 'l' ? this.handL : this.handR
-    hand.getWorldPosition(this.handWorld)
+    const launcher = this.activeHand === 'l' ? this.launchL : this.launchR
+    launcher.getWorldPosition(this.handWorld)
   }
 }
